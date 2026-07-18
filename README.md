@@ -89,7 +89,9 @@ The smart way to analyze this stuff is to go through these things would be to le
 
 I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [Claude Code for Visual Studio](https://marketplace.visualstudio.com/items?itemName=dliedke.ClaudeCodeExtension) extension, along with a $20/month subscription. Let's go to town.
 
-## First pass
+## Summary generation
+
+**Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed.
 
 **Analyze financial disclosure documents for TX-11/Pfluger and create an executive summary.**
 

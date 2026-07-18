@@ -5,7 +5,7 @@ This is todb's Pfinance Tracker, useful for tracking the financial disclosures f
 * The FEC
 * THe US House Ethics Committee
 
-Each candidate of interest has their disclosures copied here in their respective directories. For example, a candidate for TX-11 named "Pfluger" would end up in `tx-11/pfluger`.
+Each candidate of interest has their disclosures copied here in their respective directories. For example, a candidate for TX-11 named "Pfluger" would end up in `tx-11/august-pfluger`.
 
 This is mostly an experiment in how far I can get with my AI pals. I'll be documenting my process, prompts, and setup as well, so other people can do similar financial spelunking with robot friends.
 
@@ -93,11 +93,11 @@ I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [C
 
 **Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed.
 
-**Analyze financial disclosure documents for TX-11/Pfluger and create an executive summary.**
+**Analyze financial disclosure documents for TX-11/August-Pfluger and create an executive summary.**
 
 **Output:**
 - Format: Markdown
-- Filename: `tx-11/pfluger/README.md`
+- Filename: `tx-11/august-pfluger/README.md`
 - Length: Under 1,000 words
 - Title: `TX-11: August Pfluger — Financial Disclosure Summary`
 
@@ -113,4 +113,4 @@ I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [C
 
 **Tone:** Analytical, conversational for a general political audience. Avoid jargon; explain significance where needed.
 
-**Source:** All data from FEC and House Ethics Committee disclosures in the `tx-11/pfluger/` directory."
+**Source:** All data from FEC and House Ethics Committee disclosures in the `tx-11/august-pfluger/` directory."

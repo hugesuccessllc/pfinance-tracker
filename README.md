@@ -91,4 +91,24 @@ I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [C
 
 ## First pass
 
-"Analyze the financial disclosure statments in the directory tx-11/pfluger and give me a one-pager summary, in Markdown, called "TX-11 Pfluger Summarized Financial Disclosures." Surface the main take-aways that would be interesting to a political reporter: The major donors, the major disbursments, and anything that jumps out as particularly noteworthy that would surprise the average undecided voter. For example, I would expect you to notice the the reciepts for the Capital Grille, a fine-dining establishment in Washington, D.C., total up to the thousands."
+**Analyze financial disclosure documents for TX-11/Pfluger and create an executive summary.**
+
+**Output:**
+- Format: Markdown
+- Filename: `tx-11/pfluger/README.md`
+- Length: Under 1,000 words
+- Title: `TX-11: August Pfluger — Financial Disclosure Summary`
+
+**Content sections (in this order):**
+
+1. **Key Donors** — Top 5-10 individual/corporate donors by contribution amount. Include amounts and donor affiliation where relevant.
+
+2. **Major Spending** — Top disbursements by category (e.g., staff, consulting, media, events). Highlight any unusual or notable expenditures.
+
+3. **Takeaways for Political Reporters** — 3-5 findings that are newsworthy, unexpected, or revealing about the candidate's priorities, funding sources, or spending patterns. Examples: unusual donor relationships, spending that contradicts public messaging, geographic patterns, or high-interest items like luxury dining or travel.
+
+4. **Methodology & AI Transparency** — Disclose the LLM model name/version (e.g., Claude 3.5 Sonnet), key configuration settings (temperature, token limits), and the exact prompt used to generate this analysis. This transparency allows readers to understand how findings were produced, assess potential model limitations or biases, and reproduce the analysis if desired. 
+
+**Tone:** Analytical, conversational for a general political audience. Avoid jargon; explain significance where needed.
+
+**Source:** All data from FEC and House Ethics Committee disclosures in the `tx-11/pfluger/` directory."

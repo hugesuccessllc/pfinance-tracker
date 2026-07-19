@@ -36,7 +36,7 @@ The below details the process of collecting data.
 
 * Visit the committee page, eg `https://www.fec.gov/data/committee/C00719294/`, and click "Browse Reciepts", once you've checked you're looking at the right year.
 
-<img src="committee-page.png" width=600>
+<img src="committee-page-receipts.png" width=600>
 
 * Click Export, and wait a moment. By default, you're exporting the processed data. Save it to the directory you just made.
 

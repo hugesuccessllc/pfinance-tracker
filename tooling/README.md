@@ -104,8 +104,9 @@ ruby tooling/fec-api-client.rb \
 | `--committee-id ID` | Committee ID to download (e.g., `C00719294`) |
 | `--output-dir DIR` | Base directory; committee subdir will be created |
 | `-p`, `--principal` | Mark this as the principal (main) candidate committee; creates a `PRINCIPAL` marker file |
-| `--fec-dir DIR` | Directory to scan for linked committees |
-| `--list-linked` | Discover committees referenced in downloaded filings |
+| `--with-linked` | Auto-discover and download all linked committees found in Schedule B transfers; recursively downloads the entire committee network |
+| `--fec-dir DIR` | Directory to scan for linked committees (manual mode only) |
+| `--list-linked` | Discover committees referenced in downloaded filings (manual mode only) |
 | `--list-files` | Show what CSVs have been downloaded |
 | `--help` | Show all flags |
 
@@ -116,15 +117,12 @@ Before downloading a committee, the tool searches the repo for existing cached d
 **Workflow example:**
 
 ```bash
-# Download principal committee (mark with --principal flag)
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal
+# Download principal committee + auto-discover and download all linked committees in one command
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked
 
-# Discover linked committees (PACs, party committees, etc. that received transfers)
-ruby tooling/fec-api-client.rb --fec-dir tx-11/august-pfluger/fec --list-linked
-
-# Copy-paste and run the suggested commands for each linked committee
-ruby tooling/fec-api-client.rb --download --committee-id C00123456 --output-dir tx-11/august-pfluger/fec
-ruby tooling/fec-api-client.rb --download --committee-id C00654321 --output-dir tx-11/august-pfluger/fec
+# The --with-linked flag automatically discovers all committees referenced in Schedule B transfers
+# (PACs, party committees, transfer recipients, etc.) and downloads them recursively.
+# All committees end up in the same fec/ directory.
 
 # Then feed the full collected FEC directory to analyze-candidate.rb
 ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle

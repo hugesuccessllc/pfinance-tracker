@@ -29,7 +29,7 @@ class FecApiClient
   end
 
   # Download all schedule data for a committee via the OpenFEC API
-  def download_committee_data(committee_id, output_dir, principal: false)
+  def download_committee_data(committee_id, output_dir, principal: false, with_linked: false)
     committee_dir = File.join(output_dir, committee_id)
 
     puts "=" * 80
@@ -65,6 +65,25 @@ class FecApiClient
       principal_marker = File.join(committee_dir, "PRINCIPAL")
       File.write(principal_marker, "")
       puts "✓ Marked as principal committee"
+    end
+
+    # Auto-discover and download linked committees if requested
+    if with_linked
+      puts "\n" + "=" * 80
+      puts "DISCOVERING LINKED COMMITTEES"
+      puts "=" * 80
+      linked = find_linked_committees(output_dir)
+      linked_to_download = linked.reject { |c| c == committee_id }
+
+      if linked_to_download.any?
+        puts "Found #{linked_to_download.length} linked committee(s):"
+        linked_to_download.each do |c|
+          puts "  - #{c}"
+          download_committee_data(c, output_dir, principal: false, with_linked: false)
+        end
+      else
+        puts "No linked committees found."
+      end
     end
 
     puts "\n✓ Download complete"
@@ -349,6 +368,7 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--committee-id ID", "FEC committee ID (e.g., C00719294)") { |v| options[:committee_id] = v }
     opts.on("--output-dir DIR", "Base output directory (committee ID subdir will be created)") { |v| options[:output_dir] = v }
     opts.on("-p", "--principal", "Mark this committee as the principal (main) committee") { options[:principal] = true }
+    opts.on("--with-linked", "Auto-discover and download all linked committees found in Schedule B transfers") { options[:with_linked] = true }
     opts.on("--fec-dir DIR", "FEC directory to analyze (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
     opts.on("--list-files", "List all downloaded CSV files in --fec-dir") { options[:list_files] = true }
     opts.on("--list-linked", "Find linked committees in downloaded filings (requires --fec-dir)") { options[:list_linked] = true }
@@ -362,7 +382,7 @@ if $PROGRAM_NAME == __FILE__
 
   if options[:download]
     abort "fec-api-client.rb: --download requires --committee-id and --output-dir" unless options[:committee_id] && options[:output_dir]
-    client.download_committee_data(options[:committee_id], options[:output_dir], principal: options[:principal] || false)
+    client.download_committee_data(options[:committee_id], options[:output_dir], principal: options[:principal] || false, with_linked: options[:with_linked] || false)
 
   elsif options[:fec_dir]
     if options[:list_linked]

@@ -41,15 +41,15 @@ Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download commit
 echo "your-api-key-here" > .fec_api_key
 ```
 
-**Quick start:** Download a committee's current filing data:
+**Quick start:** Download a committee and all linked committees (PACs, party committees, transfer recipients, etc.) in one command:
 
 ```bash
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked
 ```
 
-The `--principal` flag marks this committee with a `PRINCIPAL` marker file for easy identification.
+The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--with-linked` flag auto-discovers and downloads all committees referenced in Schedule B transfers, recursively building the complete committee network. All committees are saved to the same `fec/` directory.
 
-**Multi-cycle:** To include older cycles, repeat the download for each cycle (the tool handles multiple CSV files in one directory — see [tooling/README.md](tooling/README.md) for details).
+**Complete funding picture:** Using `--with-linked` ensures you capture all funding flows — not just direct contributions to the principal committee, but also money flowing through allied PACs, party committees, and other linked entities. This is critical for understanding 2026 funding since, for well-funded candidates, most of the action often comes from these linked committees.
 
 **Local caching:** If a committee ID appears in multiple candidate directories, the tool searches your repo for existing cached data and copies it instead of re-downloading, saving API quota.
 

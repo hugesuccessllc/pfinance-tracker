@@ -32,27 +32,27 @@ The below details the process of collecting data.
 * Go to https://www.fec.gov/data/
 * Seach your candidate's name, and notice active committees, like so:
 
-<img src="fec-search.png" width=300>
+<img src="images/fec-search.png" width=300>
 
 * Note the committee number you're interested in (in this case, `C00719294`), and make a directory for it: `mkdir -p tx-11/august-pfluger/fec/C00719294`
 
 * Visit the committee page, eg `https://www.fec.gov/data/committee/C00719294/`, and click "Browse Reciepts", once you've checked you're looking at the right year.
 
-<img src="committee-page-receipts.png" width=600>
+<img src="images/committee-page-receipts.png" width=600>
 
 * Click Export, and wait a moment. By default, you're exporting the processed data. Save it to the directory you just made.
 
 * Flip over to Raw data, and do it again. What's the precise difference between "processed" and "raw?" Got me, may as well grab them both, more data is always better, right?
 
-<img src="raw-data-export.png" width=600>
+<img src="images/raw-data-export.png" width=600>
 
 * With your browser's back button, go back, and then select "Browse Disbursements," the next section after Receipts.
 
-<img src="browse-disbursements.png" width=600>
+<img src="images/browse-disbursements.png" width=600>
 
 * Export in the same way; processed, then raw, and save those. You'll want to routinely clear the "Your Downloads" tab because they'll get confusing after about three:
 
-<img src="clear-button.png" width=200>
+<img src="images/clear-button.png" width=200>
 
 * Take a screenshot of the cash summary, save it, and name it with a timestamp. This will serve as the overall timestamp for this collection. It's a silly way to record a timestamp but machines don't care.
 
@@ -60,7 +60,7 @@ The below details the process of collecting data.
 
 * Move on to the next committee (some candidates have more than one, as seen below).
 
-<img src="several-committees.png" width=300>
+<img src="images/several-committees.png" width=300>
 
 * Repeat all the above for each commitee, including the cash on hand and timestamp screenshot. Note each committee's ID and create a matching directory.
 
@@ -72,7 +72,7 @@ The below details the process of collecting data.
 * Select Member or Candidate (Member is default)
 * Fill in the details.
 
-<img src="house-ethics-search.png" width=350>
+<img src="images/house-ethics-search.png" width=350>
 
 * Right click on each, "Save Link As" and save them in the `house-ethics` folder.
 * Collect each year you're interested in. Note that House races are every two years, so you'll probably want two years' worth of filings.

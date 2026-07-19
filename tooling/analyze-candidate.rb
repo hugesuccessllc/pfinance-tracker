@@ -205,6 +205,7 @@ class FecAnalyzer
     if @by_cycle || @cycle
       result = { committees: committees.map { |c| { id: c.id, name: c.name } },
                  affiliated_committees: affiliated_committees,
+                 transfer_recipients: analyze_transfer_recipients,
                  cycle_integrity: cycle_integrity_check }
       if @by_cycle
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
@@ -220,6 +221,7 @@ class FecAnalyzer
       {
         committees: committees.map { |c| { id: c.id, name: c.name } },
         affiliated_committees: affiliated_committees,
+        transfer_recipients: analyze_transfer_recipients,
         donors: analyze_donors,
         disbursements: analyze_disbursements
       }
@@ -245,6 +247,7 @@ class FecAnalyzer
     end
 
     render_affiliated_committees(io, data[:affiliated_committees])
+    render_transfer_recipients(io, data[:transfer_recipients])
 
     if data[:by_cycle]
       data[:by_cycle].each do |cyc, section|
@@ -479,6 +482,38 @@ class FecAnalyzer
     result
   end
 
+  # Schedule B already carries a recipient_committee_id field whenever the payee is
+  # itself a political committee (e.g. a party committee, another candidate's
+  # committee, a PAC) — no extra API call needed to see this, since it's part of
+  # the principal committee's own downloaded data. Surfaced separately from
+  # top_payees so a human/LLM writing the summary has raw material to name
+  # candidates for a deliberate, separate follow-up download (see
+  # fec-api-client.rb --download --committee-id) — this method does NOT download
+  # or itemize anything itself, and deciding which (if any) are worth pursuing is
+  # explicitly left to whoever reads the report, not automated.
+  def analyze_transfer_recipients(cycle: @cycle)
+    totals = Hash.new(BigDecimal(0))
+    meta = {}
+
+    committees.each do |committee|
+      load_rows(committee, "schedule_b").each do |row|
+        next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
+
+        recipient_id = row["recipient_committee_id"].to_s.strip
+        next if recipient_id.empty?
+
+        amount = decimal(row["disbursement_amount"])
+        totals[recipient_id] += amount
+        meta[recipient_id] ||= { name: row["recipient_name"].to_s.strip }
+      end
+    end
+
+    totals.select { |_k, v| v > 0 }
+          .sort_by { |_k, v| -v }
+          .map { |id, total| meta[id].merge(committee_id: id, total: total) }
+  end
+
   def analyze_disbursements(cycle: @cycle)
     category_totals = Hash.new(BigDecimal(0))
     category_counts = Hash.new(0)
@@ -616,6 +651,18 @@ class FecAnalyzer
                 "cash on hand #{money_or_na(c[:cash_on_hand_end_period])}"
       end
     end
+    io.puts
+  end
+
+  def render_transfer_recipients(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "COMMITTEES SEEN AS TRANSFER RECIPIENTS (from this committee's own Schedule B — " \
+            "NOT independently downloaded or itemized; a human/LLM call on whether any are worth " \
+            "a separate --download pass)"
+    io.puts "=" * 80
+    list.each { |r| io.puts "#{r[:name]} [#{r[:committee_id]}]: #{money(r[:total])}" }
     io.puts
   end
 

@@ -21,19 +21,22 @@ By submitting a contribution, you grant Huge Success, LLC. a perpetual, worldwid
 
 # Process
 
-The below details the process of collecting data.
+This repo has two distinct phases, and they never overlap: **Step 1: Collect** your data, then **Step 2: Analyze** it. Collection means running `fec-api-client.rb` (or the manual FEC-website steps) yourself, as an explicit action, to populate a candidate's `fec/` and `house-ethics/` directories on disk. Analysis means handing one of the reusable prompts below to an LLM session and pointing it at those directories.
 
-## Collect FEC Data
+**The analysis prompts never download anything.** They assume the data they need is already sitting in `$CANDIDATE_DIR/fec/` and `$CANDIDATE_DIR/house-ethics/` before they start. If it isn't there, the correct behavior is to stop and say so — not to reach for `fec-api-client.rb --download` mid-analysis. This matters because collection is a judgment call (which committees, how much history, whether to itemize or just get totals) that belongs to a human — or an LLM explicitly asked to do it as its own separate task — not something that should happen as a side effect of "just write me a summary." Keeping the two steps apart is also what makes the iterative workflow below possible: run a fast, principal-committee-only pass, read what it suggests investigating further, then go collect *those* committees yourself before re-running analysis with the fuller picture.
+
+## Step 1: Collect Your Data
+
+### Collect FEC Data
 
 FEC data comes in two forms: raw efile dumps and structured transaction schedules. You can collect it manually via the FEC web UI or automatically via the OpenFEC API.
 
-### Automated Way (Recommended)
+#### Automated Way (Recommended)
 
 Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download committee data automatically. This gets you:
 - Raw efile CSVs (comprehensive line-item filings)
 - Schedule A (receipts/contributions)
 - Schedule B (disbursements)
-- Financial totals (not itemized detail) for the candidate's affiliated JFC/leadership PAC, if any
 
 **Setup:** Get a free API key at https://api.data.gov/ (takes 30 seconds), then:
 
@@ -41,15 +44,15 @@ Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download commit
 echo "your-api-key-here" > .fec_api_key
 ```
 
-**Quick start:** Download the principal committee's itemized data, plus totals for its affiliated committee, scoped to the current cycle to conserve API quota:
+**Quick start:** Download the principal committee's itemized data, scoped to the current cycle to conserve API quota:
 
 ```bash
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-affiliated --cycle 2026
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --cycle 2026
 ```
 
 The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--cycle` flag filters at the API level, cutting the number of pages (and API calls) fetched roughly in proportion to how many cycles the committee has been active — important since the standard API key allows only 1,000 calls/hour.
 
-**Affiliated committee, not the whole network:** `--with-affiliated` reads the principal committee's own `affiliated_committee_name` field (e.g. a joint fundraising committee or leadership PAC the candidate reports being tied to on their Form 1), resolves that name to a committee ID via FEC's committee search, and downloads only that committee's financial **totals** — receipts, disbursements, cash-on-hand — not its itemized transactions. An earlier version of this tool recursively crawled every committee that ever appeared as a Schedule B transfer recipient, which pulled in large, unrelated committees (e.g. the NRCC) just because a candidate's JFC wrote them a check. That approach is gone; `--with-affiliated` answers a narrower, more useful question — "what's the candidate's own committee, beyond the principal one?" — without downloading data for every entity that money merely passed through. If you want full itemized detail for the affiliated committee too, run `--download --committee-id <that-id>` directly and it'll get the normal itemized treatment.
+**Deliberately not automatic: other committees.** An earlier version of this tool had a `--with-linked` flag that recursively crawled every committee that ever appeared as a Schedule B transfer recipient — which pulled in large, unrelated committees (e.g. the NRCC) just because a candidate's JFC wrote them a check. That's gone. The default download above touches only the one committee you name. Run the fast, principal-only pass through Step 2 below first; its output will name other committees worth a look, and deciding whether to actually go collect one — and how deeply — is a Step 1 action you (or an LLM explicitly asked to do just that) take afterward, separately, before re-running analysis. See "Investigating a suggested committee" under "We Must Go Deeper!" below for the two ways to do that (full itemized detail via a plain `--download`, or `--with-affiliated`/`--affiliated-committee-id` for totals only).
 
 **Local caching:** If a committee ID appears in multiple candidate directories, the tool searches your repo for existing cached data and copies it instead of re-downloading, saving API quota.
 
@@ -57,7 +60,7 @@ The `--principal` flag marks the principal committee with a `PRINCIPAL` marker f
 
 For full documentation and flags, see [tooling/README.md](tooling/README.md).
 
-### Manual Way
+#### Manual Way
 
 Manually export from https://www.fec.gov/data/:
 
@@ -96,15 +99,15 @@ Manually export from https://www.fec.gov/data/:
 
 * Repeat all the above for each committee. Note each committee's ID and create a matching directory.
 
-# Collect House Ethics Committee Data
+### Collect House Ethics Committee Data
 
-## Automated Way
+#### Automated Way
 
 <img src="images/under-construction.gif" width=200>
 
 House Ethics Committee data automation is not yet implemented. Contributions welcome! For now, use the manual method below.
 
-## Manual Way
+#### Manual Way
 
 * Create a directory, `house-ethics` for your candidate or member: `mkdir -p tx-11/august-pfluger/house-ethics`
 * Go to https://disclosures-clerk.house.gov/FinancialDisclosure
@@ -117,7 +120,7 @@ House Ethics Committee data automation is not yet implemented. Contributions wel
 * Right click on each, "Save Link As" and save them in the `house-ethics` folder.
 * Collect each year you're interested in. Note that House races are every two years, so you'll probably want two years' worth of filings.
 
-# Prompts
+# Step 2: Analyze
 
 Now the hard part, the actual data science.
 
@@ -131,11 +134,17 @@ The smart way to analyze this stuff is to go through these things would be to le
 
 I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [Claude Code for Visual Studio](https://marketplace.visualstudio.com/items?itemName=dliedke.ClaudeCodeExtension) extension, along with a $20/month subscription and a working knowledge of Ruby (my R and Python knowledge is much thinner). Let's go to town.
 
+**This step assumes Step 1 is already done.** Every prompt below is written to run against data that already exists on disk. It is not supposed to trigger any download, and if a prompt run notices missing data, the correct move is to stop and tell you to go back to Step 1, not to fetch it there and then; the FEC API is a fickle mistress and cannot be trusted to flow flawlessly mid-investigation.
+
 ## Default current cycle summary generation
 
-**Prompt v3** (updated to explicitly scope cycle and require tool-based data filtering)
+**Prompt v5** (data collection removed entirely from this prompt — see "Prompt history (v5)" below)
 
-This prompt is a reusable template for the standard one-cycle executive summary — copy everything from the variable block down to the closing quote, fill in `$CANDIDATE`, `$DISTRICT`, and `$CYCLE`, and hand it to a fresh LLM session. (For multi-cycle or focused deep-dive analyses, see "We Must Go Deeper!" below.)
+This prompt is a reusable template for the standard one-cycle executive summary — copy everything from the variable block down to the closing quote, fill in `$CANDIDATE`, `$DISTRICT`, and `$CYCLE`, and hand it to a fresh LLM session. (For multi-cycle or focused deep-dive analyses — including any of the committees this prompt's output suggests investigating — see "We Must Go Deeper!" below.)
+
+**Before you hand this prompt to an LLM: make sure Step 1 is done.** `$CANDIDATE_DIR/fec/` needs at least one committee subdirectory with `schedule_a-*.csv` and `schedule_b-*.csv` files in it already (see "Step 1: Collect Your Data" above). This prompt does not collect data itself.
+
+**START PROMPT**
 
 ```
 CANDIDATE: `Candidate Name`
@@ -145,19 +154,21 @@ CYCLE: `2026` (or current election cycle)
 
 Every `$CANDIDATE` / `$DISTRICT` below is that same substitution. `$CANDIDATE_DIR` is not filled in separately — derive it from $CANDIDATE and $DISTRICT using the convention already shown in "Process" above (lowercased district + kebab-case candidate name, e.g. `TX-11` + `August Pfluger` → `tx-11/august-pfluger`); if a close-but-not-exact match already exists under `tx-*/`, use that directory instead of creating a new one.
 
-**Prompt history (v3):** Updated to explicitly require cycle scoping. Earlier versions (v1–v2) could accidentally include multi-cycle data when only current-cycle analysis was intended. v3 adds `$CYCLE` as a required input variable and mandates use of `ruby tooling/analyze-candidate.rb --cycle $CYCLE` before analysis to ensure all numbers reflect only the specified cycle. This prevents accidental inclusion of old data when the committee directory contains historical filings.
+**Prompt history (v5):** v4 still had this prompt run `fec-api-client.rb --download` itself, right before the analysis step, on the theory that a "principal committee only" download was narrow enough to be safe. In practice that still meant an analysis prompt could reach for the network and decide, on its own, that data needed fetching — the same instinct that led earlier versions to auto-chase linked/affiliated committees. v5 removes the download command from this prompt entirely. Collection (Step 1) and analysis (Step 2) are now strictly separate: if the required `fec/` data isn't already on disk when this prompt runs, **stop and say so** — tell the user which committee ID(s) to collect and point them at "Step 1: Collect Your Data" above — rather than fetching it yourself. This also makes the iterative workflow explicit: fast-pass on just the principal committee, read what it suggests investigating, go collect those committees yourself (Step 1 again, deliberately), then re-run this same analysis prompt against the now-larger `fec/` directory.
 
-**Before running this analysis:** Download the principal committee's complete FEC data using the Automated Way described in "Collect FEC Data" above. This one-time download gets all available historical data. You'll then scope this prompt to the current cycle only (see below).
+**Prompt history (v4):** v3 had this prompt download the principal committee's data plus, via a `--with-affiliated` flag, another committee auto-discovered by name search (and before that, a `--with-linked` flag that recursively crawled every committee ever referenced in a Schedule B transfer). Both put the *tool* in charge of deciding which other committees mattered — which either missed the committee that actually carried most of a candidate's money (a JFC's name search can fail; see `tooling/fec-api-client.rb`'s header) or, worse, pulled in large, unrelated committees (a party committee, another candidate's committee) that happened to receive a transfer. v4 scoped this prompt to the principal committee **only**, with `analyze-candidate.rb`'s own Schedule B data (a `recipient_committee_id` for any transfer recipient that's itself a committee — zero extra API calls) feeding a "Suggested Committees for Further Investigation" output section instead of an automatic download.
 
-**Prompt history:** the pilot run of this prompt (TX-11/August-Pfluger) shipped a summary with a "Correction (post-publication review)" section — it took a second pass, prompted by a human asking pointed questions, to catch a couple of data-integrity bugs after the fact. Both are now fixed in [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) and documented in its header comments, not repeated here — see the note below on why. This prompt (v2) tells the model to read and reuse that tool up front, specifically so a fresh session doesn't rediscover the same bugs before it can trust its own numbers. A "Correction" section in the output is a sign this prompt or the tool needs another pass, not an acceptable steady state.
+**Prompt history:** the pilot run of this prompt (TX-11/August-Pfluger) shipped a summary with a "Correction (post-publication review)" section — it took a second pass, prompted by a human asking pointed questions, to catch a couple of data-integrity bugs after the fact. Both are now fixed in [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) and documented in its header comments, not repeated here — see the note below on why. This prompt tells the model to read and reuse that tool up front, specifically so a fresh session doesn't rediscover the same bugs before it can trust its own numbers. A "Correction" section in the output is a sign this prompt or the tool needs another pass, not an acceptable steady state.
 
 **Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed. **Before writing anything new, check whether [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) already exists and covers this candidate's data** (`bundle exec ruby tooling/analyze-candidate.rb --help` shows its interface). It's built to be reused across candidates via `--fec-dir` / `--house-ethics-dir` arguments — extend it in place if a candidate's filings need something it doesn't handle yet, rather than writing a parallel one-off script. **Read that file's header comments in full before trusting or reporting any total** — they hold the specific, tested data-integrity gotchas (duplicate/amended filings, dropped correction rows, lump-sum vendor payments that look unitemized but aren't, and more) as close to the code they explain as possible, so they stay accurate as the tool changes instead of drifting out of sync with a second copy kept here.
 
 **Analyze financial disclosure documents for $CANDIDATE ($DISTRICT) and create an executive summary for the $CYCLE election cycle only.**
 
-**Scope:** This analysis covers **only** transactions dated within the $CYCLE election cycle (filed in $CYCLE). Do not include historical cycles or outdated filings, even if older data exists in the source files. Filter all donors and spending to cycle-year transactions only.
+**Scope:** This analysis covers **only** the candidate's principal campaign committee, and **only** transactions dated within the $CYCLE election cycle (filed in $CYCLE). Do not download, itemize, or otherwise pull in data for any other committee (a JFC, leadership PAC, party committee, etc.) as part of this run, even if one is visible in the principal committee's own data — see "Suggested Committees for Further Investigation" below for how to handle those instead. Do not include historical cycles or outdated filings, even if older data exists in the source files.
 
-**Run this before starting the analysis:**
+**Before doing anything else, verify the data is already collected:** check that `$CANDIDATE_DIR/fec/` contains at least one committee subdirectory (matching `C\d{6,}`) with `schedule_a-*.csv` / `schedule_b-*.csv` files in it. **If it does not, stop here.** Tell the user data collection hasn't happened yet, point them at "Step 1: Collect Your Data" in this README, and do not run `fec-api-client.rb --download` yourself to fill the gap — that decision (which committee, how much history, itemized vs. totals) belongs to Step 1, not to this analysis prompt.
+
+**Once the data is confirmed present, run this:**
 ```bash
 ruby tooling/analyze-candidate.rb \
   --fec-dir $CANDIDATE_DIR/fec \
@@ -165,35 +176,37 @@ ruby tooling/analyze-candidate.rb \
   --cycle $CYCLE
 ```
 
-Use the output as your source data. The tool filters transactions to the specified cycle and documents any data-integrity warnings. Read the tool's header comments (in `/tooling/analyze-candidate.rb`) to understand how it handles multi-cycle data and amendments.
+Use the output as your source data. The tool filters transactions to the specified cycle and documents any data-integrity warnings, including a list of committees seen as Schedule B transfer recipients (raw material for the Suggested Committees section — the tool does not download or itemize these itself). Read the tool's header comments (in `/tooling/analyze-candidate.rb`) to understand how it handles multi-cycle data and amendments.
 
 **Output:**
 - Format: Markdown
 - Filename: `$CANDIDATE_DIR/README.md`
-- Length: Main analysis should be roughly 1,000-1,500 words. The complete Methodology & AI Transparency section (including the full verbatim prompt) doesn't count against this word limit.
+- Length: Main analysis should be roughly 2,000 words. The complete Methodology & AI Transparency section (including the full verbatim prompt) doesn't count against this word limit.
 - Title: `$DISTRICT: $CANDIDATE — Financial Disclosure Summary ($CYCLE Cycle)`
 
 **Content sections (in this order):**
 
-1. **Key Donors** — Top 5-10 individual/corporate donors by contribution amount in the $CYCLE cycle. Include amounts and donor affiliation where relevant.
+1. **Key Donors** — Top 5-10 individual/corporate donors by contribution amount in the $CYCLE cycle, from the principal committee's itemized data. Include amounts and donor affiliation where relevant. If a large share of the candidate's money likely moved through a JFC or other affiliated committee not covered here, say so plainly rather than implying this list is the complete donor picture.
 
 2. **Major Spending** — Top disbursements by category (e.g., staff, consulting, media, events) in the $CYCLE cycle. Highlight any unusual or notable expenditures.
 
 3. **Takeaways** — 3-5 findings that are newsworthy, unexpected, or revealing about the candidate's priorities, funding sources, or spending patterns in the $CYCLE cycle. Examples: unusual donor relationships, spending that contradicts public messaging, geographic patterns, or high-interest items like luxury dining or travel.
 
-4. **Methodology & AI Transparency** — Disclose the LLM model name/version (e.g., Claude 3.5 Sonnet), key configuration settings (temperature, token limits), and the exact prompt used to generate this analysis (i.e. this template with $CANDIDATE/$DISTRICT/$CYCLE filled in). Include the exact tool command you ran: `ruby tooling/analyze-candidate.rb --fec-dir $CANDIDATE_DIR/fec --house-ethics-dir $CANDIDATE_DIR/house-ethics --cycle $CYCLE`. This transparency allows readers to understand how findings were produced, assess potential model limitations or biases, and reproduce the analysis if desired. If applying `analyze-candidate.rb`'s data-integrity gotchas changed a finding versus a naive read of the data, say so briefly here instead of adding a separate correction section — this prompt already expects that check to happen before publication, not after.
+4. **Suggested Committees for Further Investigation** — A short, judgment-based list (not an exhaustive dump) of other committees worth a deliberate follow-up look, drawn **only from data already local** — `analyze-candidate.rb`'s "committees seen as transfer recipients" list, or a committee name already visible somewhere in the downloaded CSVs. Do not make a live API call (e.g. to check `affiliated_committee_name`) to populate this section — that would itself be a collection action, which this prompt doesn't do. For each committee named, note why it might matter and how a human would pursue it later (`fec-api-client.rb --download --committee-id <id>` for full itemized data, or `--with-affiliated` for totals only — see "We Must Go Deeper!"). This section is explicitly a pointer for a human to decide on, not a second analysis — don't itemize or deep-dive any of these committees in this same run.
+
+5. **Methodology & AI Transparency** — Disclose the LLM model name/version (e.g., Claude 3.5 Sonnet), key configuration settings (temperature, token limits), and the exact prompt used to generate this analysis (i.e. this template with $CANDIDATE/$DISTRICT/$CYCLE filled in). Include the exact `analyze-candidate.rb` command you ran, and note (without re-running it) which `fec-api-client.rb --download` command originally populated the `fec/` directory this analysis reads from, if that's discoverable (e.g. from `.download-progress` marker files) — so a reader can tell what data collection actually happened, even though this analysis pass didn't perform it. This transparency allows readers to understand how findings were produced, assess potential model limitations or biases, and reproduce the analysis if desired. If applying `analyze-candidate.rb`'s data-integrity gotchas changed a finding versus a naive read of the data, say so briefly here instead of adding a separate correction section — this prompt already expects that check to happen before publication, not after.
 
 **Tone:** Analytical, conversational for a general political audience. Avoid jargon; explain significance where needed.
 
-**Source:** FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory, filtered to the $CYCLE cycle."
+**Source:** FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory, filtered to the $CYCLE cycle and to the principal committee only."
 
-**END OF PROMPT**
+**END PROMPT**
 
 # We Must Go Deeper!
 
 The "Default current cycle summary generation" section above produces a fixed, one-cycle executive summary — a high-level snapshot of the current filing period's top donors, spending, and takeaways. But a candidate's financial story often spans multiple cycles, and worth investigating are focused cuts: all corporate/PAC donations across their career, individual donors giving above a threshold in each cycle, or how spending priorities have shifted over time.
 
-This section documents how to build such deep-dive analyses, reusing the existing `analyze-candidate.rb` tool to power them rather than writing parallel scripts.
+This section documents how to build such deep-dive analyses, reusing the existing `analyze-candidate.rb` tool to power them rather than writing parallel scripts. The same Step 1/Step 2 split applies here: "Collecting multi-cycle data" and "Investigating a suggested committee" below are both Step 1 (data collection, run yourself, before analysis) — the "Deep-dive prompt template" further down is Step 2 (analysis only, no downloading), same as the main summary prompt.
 
 ## Output convention
 
@@ -240,6 +253,28 @@ ruby tooling/fec-api-client.rb --download --committee-id C00OLD123 --output-dir 
 
 This protects against a known naming footgun: the script only recognizes committee directories matching `/\AC\d{6,}\z/` (committee ID, C-prefix). If you accidentally name a directory after the FEC candidate ID (H-prefix, e.g. `H6TX11112`) instead of the committee ID, the tool silently finds zero committees and reports all-zero totals with no warning — so use the committee ID consistently.
 
+## Investigating a suggested committee
+
+The default summary prompt above deliberately stops at the principal committee and, at most, names other committees worth a look (see its "Suggested Committees for Further Investigation" section) without downloading their data. Once a human (or a fresh LLM session) decides one is worth pursuing, there are two levels of depth to choose from, both via `fec-api-client.rb`:
+
+**Full itemized treatment** — same as any principal committee, just point it at the other committee's ID and the same `fec/` directory:
+```bash
+ruby tooling/fec-api-client.rb --download --committee-id <committee-id> --output-dir tx-11/august-pfluger/fec --cycle 2026
+```
+`analyze-candidate.rb` will then fold it into the normal donor/spending analysis alongside the principal committee (it doesn't distinguish "principal" from "other" for itemized purposes — the `PRINCIPAL` marker file is informational only).
+
+**Totals only** — enough to see the scale of money moving through a committee without itemizing it:
+```bash
+# Auto-discover by name (reads the principal's own affiliated_committee_name field):
+ruby tooling/fec-api-client.rb --download --committee-id <principal-id> --output-dir tx-11/august-pfluger/fec --with-affiliated --cycle 2026
+
+# Or name a specific committee ID directly (e.g. one from the transfer-recipients list):
+ruby tooling/fec-api-client.rb --download --committee-id <principal-id> --output-dir tx-11/august-pfluger/fec --affiliated-committee-id <committee-id> --cycle 2026
+```
+This writes `totals.json` (no itemized rows) to that committee's directory; `analyze-candidate.rb` reports it in its own "AFFILIATED COMMITTEES" section, separate from itemized totals.
+
+Neither of these should be run automatically as part of the default summary prompt, or by an LLM mid-analysis — see the v5 prompt-history note above for why. Run them yourself (or ask an LLM to run just this, as its own explicit task) as Step 1, then re-run Step 2 analysis afterward against the enlarged `fec/` directory.
+
 ## New tool flags for deep dives
 
 Run `bundle exec ruby tooling/analyze-candidate.rb --help` to see the full reference, but the key additions are:
@@ -275,7 +310,7 @@ bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec
 
 ## Deep-dive prompt template
 
-Like "Default current cycle summary generation" above, this is a reusable template for a deep-dive analysis. Fill in the bracketed placeholders and hand the prompt to a fresh LLM session:
+Like "Default current cycle summary generation" above, this is a reusable template for a deep-dive analysis, and the same rule applies: **it assumes Step 1 is already done and does not download anything itself.** Fill in the bracketed placeholders and hand the prompt to a fresh LLM session:
 
 ```
 CANDIDATE: `Candidate Name`
@@ -283,6 +318,8 @@ DISTRICT: `District Name`
 TOPIC: `Full Career History` or `Corporate & PAC Donors` or `Large Individual Donors (>$50k/cycle)` — whatever this dive investigates.
 TOOL_FLAGS: The `--by-cycle`, `--cycle`, `--min-amount`, and/or `--donor-type` flags to run the analysis with.
 ```
+
+**Before doing anything else, verify the data this deep dive needs is already collected** (e.g. multi-cycle history via "Collecting multi-cycle data" above, or a specific committee via "Investigating a suggested committee" above). If it isn't there, stop and say so — point the user at the relevant Step 1 instructions rather than downloading it yourself.
 
 **Analyze financial disclosure documents for $CANDIDATE ($DISTRICT) and create a deep-dive report on $TOPIC.**
 

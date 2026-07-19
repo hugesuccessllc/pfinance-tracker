@@ -25,7 +25,7 @@ The below details the process of collecting data.
 
 * Make a directory to store FEC things:
 
-`mkdir tx-11/august-pfluger/fec/`
+`mkdir -p tx-11/august-pfluger/fec/`
 
 * Go to https://www.fec.gov/data/
 * Seach your candidate, and notice active committees, like so:
@@ -87,7 +87,7 @@ Now, we have access to large language models (LLMs).
 
 The smart way to analyze this stuff is to go through these things would be to leverage our LLM friends to help us write those R and Python parsers to do what we want. This is starting to sound boring agian, though. The [Max Power](https://youtu.be/iVtB7vLRoUo?t=92) way is just ask the LLM to do all the work, then figure out how to prove whatever wild claims it makes. We'll deal with the matter of proof later.
 
-I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [Claude Code for Visual Studio](https://marketplace.visualstudio.com/items?itemName=dliedke.ClaudeCodeExtension) extension, along with a $20/month subscription. Let's go to town.
+I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [Claude Code for Visual Studio](https://marketplace.visualstudio.com/items?itemName=dliedke.ClaudeCodeExtension) extension, along with a $20/month subscription and a working knowledge of Ruby (my R and Python knowledge is much thinner). Let's go to town.
 
 ## Summary generation
 

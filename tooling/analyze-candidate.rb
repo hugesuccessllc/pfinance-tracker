@@ -20,16 +20,51 @@
 #
 # DATA-MINING STRATEGY (read this before changing the filters below)
 #
-# FEC bulk exports ("processed data" from fec.gov/data, saved as schedule_a-*.csv for
-# receipts and schedule_b-*.csv for disbursements) have two gotchas that will silently
-# double- or over-count money if you naively SUM(amount):
+# This file only reads schedule_a-*.csv (receipts) and schedule_b-*.csv (disbursements) —
+# fec.gov's "processed" bulk exports. Each committee directory also tends to accumulate
+# efile-*.csv files (the campaign's raw electronic submission) from re-running the FEC
+# export UI — DO NOT glob those in here. They cover largely the same transactions as
+# schedule_a/schedule_b in a different shape, and reading both would double-count. If you
+# ever need the raw efile data for a field schedule_a/b doesn't carry, join it in as a
+# separate pass rather than summing across both file sets.
 #
-#   1. memo_code == "X" marks a line as informational-only — its amount is already
-#      reflected in a different, non-memo line elsewhere in the filing (this is how FEC
-#      represents earmarked/conduit contributions, credit-card sub-itemization, etc.).
-#      Every aggregate in this script excludes memo rows for that reason.
+# FEC's processed schedule_a/schedule_b exports appear to already resolve amendments —
+# in the committees checked so far, transaction_id is unique per file except for a couple
+# of memo/non-memo pairs (see point 1), so a superseded-then-amended transaction does NOT
+# show up as two competing live rows. Don't assume this holds for every committee, though:
+# before trusting a new candidate's totals, spot-check for repeated transaction_id values
+# (`amendment_indicator` "C"/"D" rows are the ones most likely to have a still-present
+# original) and net them out if you find any.
 #
-#   2. Schedule A's `line_number_label` column tells you what KIND of receipt a row is,
+# Two more gotchas will silently double- or under-count money if you naively SUM(amount):
+#
+#   1. memo_code == "X" marks a line as informational-only for FEC's own report totals —
+#      but what that means for YOUR aggregate depends on which schedule you're in:
+#      - Schedule A: the memo row is a redundant rollup (e.g. a WinRed/conduit "earmarked"
+#        line whose back_reference_transaction_id points at the real, already-itemized
+#        individual donor row). Excluding it is correct and loses no information.
+#      - Schedule B: the memo rows are very often the ONLY place the real vendor-level
+#        detail lives. A committee reports one lump non-memo payment to a card processor
+#        ("AMERICAN EXPRESS", disbursement_description "SEE MEMO ITEMS") and then dozens
+#        to hundreds of memo_code=X child rows — each with a real recipient_name (an
+#        airline, a hotel, a caterer) and back_reference_transaction_id pointing at that
+#        parent — giving the actual itemized purchases. Excluding memo rows keeps the
+#        DOLLAR TOTAL correct (summing parent + children would double it), but throwing
+#        the children away entirely erases the only merchant-level detail that exists for
+#        that spending. Don't call this kind of lump payment a "black box" without first
+#        checking for back-referenced children — see analyze_card_breakdown below, which
+#        surfaces them separately so the total stays accurate AND the detail isn't lost.
+#
+#   2. Negative amounts are corrections (chargebacks, reattributions, refunds), not noise
+#      — drop the row (`next if amount <= 0`) and you'll overstate whoever the correction
+#      applies to; net it into their running total instead. This script sums every
+#      non-memo, in-scope row per donor/payee/category, positive or negative, and only
+#      then ranks the resulting totals — it does not filter rows by sign before summing.
+#      (The one place row-level sign filtering is still correct is the "largest single
+#      disbursements" list, which is deliberately asking "biggest individual outflows",
+#      not "net total for this payee".)
+#
+#   3. Schedule A's `line_number_label` column tells you what KIND of receipt a row is,
 #      and most of what shows up there is NOT a donation from an outside supporter:
 #      - "Transfers from authorized committees" — money moving between a candidate's own
 #        committees, or between participants in a joint fundraising committee (JFC). A JFC
@@ -56,7 +91,12 @@
 # script extracts each PDF's text (via the pure-Ruby `pdf-reader` gem, so no system
 # dependency on poppler/pdftotext) and greps for lines that look like asset/transaction
 # rows (a dollar amount or a dollar range). That's a starting point for a human or LLM to
-# read, not a fully-parsed dataset — verify anything you cite against the source PDF.
+# read, not a fully-parsed dataset — verify anything you cite against the source PDF. Also
+# watch for amended PTRs: a member can refile a corrected Periodic Transaction Report, and
+# an original + its amendment describing the same trade would double-count if you summed
+# "number of trades" or dollar ranges across every PDF in the directory. Check each PDF's
+# own filing-type/status text (and matching dates across filings) before treating two
+# filings as two distinct transactions.
 
 require "csv"
 require "bigdecimal"
@@ -131,6 +171,25 @@ class FecAnalyzer
     print_table(io, "LARGEST SINGLE DISBURSEMENTS (line items)", data[:disbursements][:top_single]) do |row, i|
       format("%2d. %-30s %12s  %s | %s, %s | %s | %s", i + 1, row[:payee][0, 30], money(row[:amount]), row[:date], row[:city], row[:state], row[:category], row[:description][0, 50])
     end
+    io.puts
+
+    cb = data[:disbursements][:card_breakdown]
+    io.puts "=" * 80
+    io.puts "CARD / BULK PAYMENT BREAKDOWN (memo sub-items behind \"SEE MEMO ITEMS\" lump payments)"
+    io.puts "=" * 80
+    io.puts "#{cb[:parent_count]} lump payment(s) totaling #{money(cb[:parent_total])}; " \
+            "#{cb[:child_count]} itemized memo sub-transaction(s) totaling #{money(cb[:child_total])} " \
+            "(#{cb[:coverage_pct] || "n/a"}% of the lump total is itemized at the vendor level below)."
+    io.puts
+    io.puts "Top vendors within these lump payments:"
+    cb[:top_vendors].each_with_index do |row, i|
+      io.puts format("%2d. %-40s %12s  | %s, %s", i + 1, row[:payee][0, 40], money(row[:total]), row[:city], row[:state])
+    end
+    io.puts
+    io.puts "By category within these lump payments:"
+    cb[:by_category].each_with_index do |row, i|
+      io.puts format("%2d. %-45s %12s", i + 1, row[:category][0, 45], money(row[:total]))
+    end
 
     io.string
   end
@@ -173,8 +232,9 @@ class FecAnalyzer
         next if row["memo_code"] == "X"
         next unless DONOR_LABELS.include?(row["line_number_label"].to_s.strip)
 
+        # Sum every in-scope row, positive or negative — chargebacks/reattributions net
+        # against the donor's other gifts rather than being silently discarded.
         amount = decimal(row["contribution_receipt_amount"])
-        next if amount <= 0
 
         name = row["contributor_name"].to_s.strip
         next if name.empty?
@@ -196,7 +256,7 @@ class FecAnalyzer
       end
     end
 
-    top = totals.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
+    top = totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
 
     {
       committee_totals: committee_totals,
@@ -217,8 +277,9 @@ class FecAnalyzer
       load_rows(committee, "schedule_b").each do |row|
         next if row["memo_code"] == "X"
 
+        # Sum every non-memo row, positive or negative — vendor credits/refunds net
+        # against that vendor's other charges rather than being silently discarded.
         amount = decimal(row["disbursement_amount"])
-        next if amount <= 0
 
         category = row["category_code_full"].to_s.strip
         category = "Uncategorized" if category.empty?
@@ -232,6 +293,10 @@ class FecAnalyzer
         end
 
         committee_totals[committee.id] += amount
+
+        # Largest-single-transaction view deliberately looks at individual outflows, not
+        # net-per-payee, so it filters to positive line items only (see strategy note 2).
+        next if amount <= 0
 
         all_disbursements << {
           committee: committee.id,
@@ -248,9 +313,59 @@ class FecAnalyzer
 
     {
       committee_totals: committee_totals,
-      by_category: category_totals.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total, count: category_counts[cat] } },
-      top_payees: payee_totals.sort_by { |_k, v| -v }.first(@top).map { |payee, total| payee_meta[payee].merge(payee: payee, total: total) },
-      top_single: all_disbursements.sort_by { |r| -r[:amount] }.first(@top)
+      by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total, count: category_counts[cat] } },
+      top_payees: payee_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| payee_meta[payee].merge(payee: payee, total: total) },
+      top_single: all_disbursements.sort_by { |r| -r[:amount] }.first(@top),
+      card_breakdown: analyze_card_breakdown
+    }
+  end
+
+  # Surfaces the real vendor-level detail hiding inside lump/bulk payments (typically
+  # credit-card processors) whose disbursement_description says "SEE MEMO ITEM(S)" — see
+  # strategy note 1 above. Reported separately from top_payees/by_category so the primary
+  # totals stay correct (parent + children would double-count).
+  def analyze_card_breakdown
+    vendor_totals = Hash.new(BigDecimal(0))
+    vendor_meta = {}
+    category_totals = Hash.new(BigDecimal(0))
+    parent_total = BigDecimal(0)
+    parent_count = 0
+    child_total = BigDecimal(0)
+    child_count = 0
+
+    committees.each do |committee|
+      rows = load_rows(committee, "schedule_b")
+      parents = rows.select { |r| r["memo_code"] != "X" && r["disbursement_description"].to_s.match?(/SEE MEMO ITEMS?/i) }
+      next if parents.empty?
+
+      parent_ids = parents.map { |r| r["transaction_id"] }
+      parents.each { |r| parent_total += decimal(r["disbursement_amount"]); parent_count += 1 }
+
+      rows.select { |r| parent_ids.include?(r["back_reference_transaction_id"]) }.each do |row|
+        amount = decimal(row["disbursement_amount"])
+        child_total += amount
+        child_count += 1
+
+        payee = row["recipient_name"].to_s.strip
+        unless payee.empty?
+          vendor_totals[payee] += amount
+          vendor_meta[payee] ||= { city: row["recipient_city"].to_s.strip, state: row["recipient_state"].to_s.strip }
+        end
+
+        category = row["category_code_full"].to_s.strip
+        category = "Uncategorized" if category.empty?
+        category_totals[category] += amount
+      end
+    end
+
+    {
+      parent_total: parent_total,
+      parent_count: parent_count,
+      child_total: child_total,
+      child_count: child_count,
+      coverage_pct: parent_total.zero? ? nil : (child_total / parent_total * 100).to_f.round(1),
+      top_vendors: vendor_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| vendor_meta[payee].merge(payee: payee, total: total) },
+      by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total } }
     }
   end
 

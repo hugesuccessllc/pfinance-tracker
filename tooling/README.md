@@ -128,6 +128,28 @@ ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir 
 ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
 ```
 
+**Progress tracking:**
+
+Downloads are incremental — CSVs are written as pages arrive, so partial results are saved even if the download is interrupted. Track progress via metadata files:
+
+- `schedule_a-TIMESTAMP.csv.meta` — Shows pages fetched, total pages, rows written, status (`in_progress` or `complete`)
+- `schedule_b-TIMESTAMP.csv.meta` — Same for disbursements
+- `.efile-progress` — Tracks efile filings downloaded (pages fetched, files downloaded, status)
+- `.download-progress` — Committee-level marker showing download timestamp and final status
+
+Example `.meta` file:
+```
+timestamp: 2026-07-19T14:30:15.123456Z
+pages_fetched: 206
+total_pages: 393
+rows_written: 20600
+status: in_progress
+```
+
+If a download is interrupted by rate limiting, you can:
+1. Wait for API quota to reset (rolling 1-hour window)
+2. Re-run the same download command — it will resume and write to the same CSV file
+
 **Notes:**
 
 - Downloads include:
@@ -136,4 +158,4 @@ ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-eth
 - All files saved as uncompressed CSVs for direct file searching and grepping.
 - No manual FEC website clicking needed — fully automated API-based download.
 - API is rate-limited (HTTP 429). The tool automatically retries with exponential backoff (waits 1s, 2s, 4s, 8s, 16s between retries, up to 5 retries).
-- Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes.
+- Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes. Large committees with linked networks may take longer due to rate limiting.

@@ -67,6 +67,10 @@ class FecApiClient
       puts "✓ Marked as principal committee"
     end
 
+    # Write committee-level progress marker
+    progress_marker = File.join(committee_dir, ".download-progress")
+    File.write(progress_marker, "timestamp: #{Time.now.iso8601}\ncommittee_id: #{committee_id}\nstatus: complete\n")
+
     # Auto-discover and download linked committees if requested
     if with_linked
       puts "\n" + "=" * 80
@@ -195,10 +199,14 @@ class FecApiClient
   def download_schedule(schedule, committee_id, output_dir)
     puts "Downloading #{schedule}..."
 
-    all_rows = []
+    filename = "#{schedule}-#{Time.now.iso8601}.csv"
+    filepath = File.join(output_dir, filename)
+    meta_filepath = "#{filepath}.meta"
+
     headers = nil
     page = 1
     total_pages = nil
+    total_rows = 0
 
     loop do
       url = "#{BASE_URL}/schedules/#{schedule}/" \
@@ -213,34 +221,53 @@ class FecApiClient
       # Extract headers from first response
       if headers.nil? && results.any?
         headers = results.first.keys
+        # Write header row on first page
+        File.open(filepath, "w") do |f|
+          CSV.new(f) do |csv|
+            csv << headers
+          end
+        end
       end
 
       total_pages ||= response.dig("pagination", "pages") || 1
-      puts "  Page #{page}/#{total_pages}... (#{results.length} rows)"
 
-      all_rows.concat(results)
+      # Append data rows incrementally
+      if results.any? && headers
+        File.open(filepath, "a") do |f|
+          CSV.new(f) do |csv|
+            results.each { |row| csv << headers.map { |h| row[h] } }
+          end
+        end
+        total_rows += results.length
+      end
+
+      # Write progress metadata
+      write_schedule_meta(meta_filepath, page, total_pages, total_rows, "in_progress")
+      puts "  Page #{page}/#{total_pages}... (#{results.length} rows, #{total_rows} total)"
 
       break if page >= total_pages
 
       page += 1
     end
 
-    # Write to CSV (uncompressed for direct greppability)
-    if all_rows.any? && headers
-      filename = "#{schedule}-#{Time.now.iso8601}.csv"
-      filepath = File.join(output_dir, filename)
-
-      File.open(filepath, "w") do |f|
-        CSV.new(f) do |csv|
-          csv << headers
-          all_rows.each { |row| csv << headers.map { |h| row[h] } }
-        end
-      end
-
-      puts "  ✓ Saved #{all_rows.length} rows to #{filename}"
+    # Mark as complete
+    if total_rows > 0 && headers
+      write_schedule_meta(meta_filepath, total_pages, total_pages, total_rows, "complete")
+      puts "  ✓ Saved #{total_rows} rows to #{filename}"
     else
       puts "  (no data found)"
     end
+  end
+
+  def write_schedule_meta(filepath, pages_fetched, total_pages, rows_written, status)
+    meta = {
+      timestamp: Time.now.iso8601,
+      pages_fetched: pages_fetched,
+      total_pages: total_pages,
+      rows_written: rows_written,
+      status: status
+    }
+    File.write(filepath, meta.map { |k, v| "#{k}: #{v}" }.join("\n"))
   end
 
   def download_efile_data(committee_id, output_dir)
@@ -249,6 +276,7 @@ class FecApiClient
     page = 1
     total_pages = nil
     efile_count = 0
+    efile_meta_file = File.join(output_dir, ".efile-progress")
 
     loop do
       url = "#{BASE_URL}/efile/filings/" \
@@ -279,6 +307,9 @@ class FecApiClient
           filepath = File.join(output_dir, filename)
           File.write(filepath, csv_data)
           efile_count += 1
+
+          # Write efile progress metadata
+          write_efile_meta(efile_meta_file, page, total_pages, efile_count, "in_progress")
         rescue StandardError => e
           # Skip on error
         end
@@ -289,7 +320,20 @@ class FecApiClient
       page += 1
     end
 
+    # Mark efile download as complete
+    write_efile_meta(efile_meta_file, total_pages, total_pages, efile_count, "complete") if efile_count > 0
     puts "  ✓ Downloaded #{efile_count} efile CSV(s)"
+  end
+
+  def write_efile_meta(filepath, pages_fetched, total_pages, files_downloaded, status)
+    meta = {
+      timestamp: Time.now.iso8601,
+      pages_fetched: pages_fetched,
+      total_pages: total_pages,
+      files_downloaded: files_downloaded,
+      status: status
+    }
+    File.write(filepath, meta.map { |k, v| "#{k}: #{v}" }.join("\n"))
   end
 
   def download_external_csv(url, retry_count: 0, max_retries: 5)

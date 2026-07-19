@@ -1,6 +1,13 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# This tool is usually run from the repo root, but its Gemfile lives here in
+# tooling/ — pin it explicitly so plain `ruby tooling/fec-api-client.rb`
+# resolves gems (csv is a bundled gem as of Ruby 3.4) from any working
+# directory, without needing `bundle exec` or a BUNDLE_GEMFILE= prefix.
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
+require "bundler/setup"
+
 require "net/http"
 require "json"
 require "optparse"

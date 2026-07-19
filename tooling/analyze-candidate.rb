@@ -169,6 +169,13 @@
 # own filing-type/status text (and matching dates across filings) before treating two
 # filings as two distinct transactions.
 
+# This tool is usually run from the repo root, but its Gemfile lives here in
+# tooling/ — pin it explicitly so plain `ruby tooling/analyze-candidate.rb`
+# resolves gems correctly from any working directory, without needing
+# `bundle exec` or a BUNDLE_GEMFILE= prefix.
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
+require "bundler/setup"
+
 require "csv"
 require "bigdecimal"
 require "json"

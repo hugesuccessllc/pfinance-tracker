@@ -91,24 +91,26 @@ I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [C
 
 ## Summary generation
 
-This prompt is a reusable template — copy everything from "Fill in before use" down to the closing quote, fill in the three blanks below (every `[CANDIDATE]` / `[DISTRICT]` / `[CANDIDATE_DIR]` token further down gets the same replacement), and hand it to a fresh LLM session.
+This prompt is a reusable template — copy everything from the variable block down to the closing quote, fill in `$CANDIDATE` and `$DISTRICT`, and hand it to a fresh LLM session.
 
-**Fill in before use:**
-- Candidate: `[CANDIDATE]` (e.g. `August Pfluger`)
-- District: `[DISTRICT]` (e.g. `TX-11`)
-- Candidate directory: `[CANDIDATE_DIR]` (matches the convention in "Process" above, e.g. `tx-11/august-pfluger` — must already exist with `fec/` and, if collected, `house-ethics/` subdirectories)
+```
+CANDIDATE: `Candidate Name`
+DISTRICT: `District Name`
+```
+
+Every `$CANDIDATE` / `$DISTRICT` below is that same substitution. `$CANDIDATE_DIR` is not filled in separately — derive it from $CANDIDATE and $DISTRICT using the convention already shown in "Process" above (lowercased district + kebab-case candidate name, e.g. `TX-11` + `August Pfluger` → `tx-11/august-pfluger`); if a close-but-not-exact match already exists under `tx-*/`, use that directory instead of creating a new one.
 
 **Prompt history:** the pilot run of this prompt (TX-11/August-Pfluger) shipped a summary with a "Correction (post-publication review)" section — it took a second pass, prompted by a human asking pointed questions, to catch a couple of data-integrity bugs after the fact. Both are now fixed in [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) and documented in its header comments, not repeated here — see the note below on why. This prompt (v2) tells the model to read and reuse that tool up front, specifically so a fresh session doesn't rediscover the same bugs before it can trust its own numbers. A "Correction" section in the output is a sign this prompt or the tool needs another pass, not an acceptable steady state.
 
 **Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed. **Before writing anything new, check whether [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) already exists and covers this candidate's data** (`bundle exec ruby tooling/analyze-candidate.rb --help` shows its interface). It's built to be reused across candidates via `--fec-dir` / `--house-ethics-dir` arguments — extend it in place if a candidate's filings need something it doesn't handle yet, rather than writing a parallel one-off script. **Read that file's header comments in full before trusting or reporting any total** — they hold the specific, tested data-integrity gotchas (duplicate/amended filings, dropped correction rows, lump-sum vendor payments that look unitemized but aren't, and more) as close to the code they explain as possible, so they stay accurate as the tool changes instead of drifting out of sync with a second copy kept here.
 
-**Analyze financial disclosure documents for [CANDIDATE] ([DISTRICT]) and create an executive summary.**
+**Analyze financial disclosure documents for $CANDIDATE ($DISTRICT) and create an executive summary.**
 
 **Output:**
 - Format: Markdown
-- Filename: `[CANDIDATE_DIR]/README.md`
+- Filename: `$CANDIDATE_DIR/README.md`
 - Length: Roughly 1,000-1,500 words — a complete Methodology & AI Transparency section (including the full verbatim prompt) matters more than hitting the low end.
-- Title: `[DISTRICT]: [CANDIDATE] — Financial Disclosure Summary`
+- Title: `$DISTRICT: $CANDIDATE — Financial Disclosure Summary`
 
 **Content sections (in this order):**
 
@@ -118,8 +120,8 @@ This prompt is a reusable template — copy everything from "Fill in before use"
 
 3. **Takeaways for Political Reporters** — 3-5 findings that are newsworthy, unexpected, or revealing about the candidate's priorities, funding sources, or spending patterns. Examples: unusual donor relationships, spending that contradicts public messaging, geographic patterns, or high-interest items like luxury dining or travel.
 
-4. **Methodology & AI Transparency** — Disclose the LLM model name/version (e.g., Claude 3.5 Sonnet), key configuration settings (temperature, token limits), and the exact prompt used to generate this analysis (i.e. this template with the blanks filled in). This transparency allows readers to understand how findings were produced, assess potential model limitations or biases, and reproduce the analysis if desired. If applying `analyze-candidate.rb`'s data-integrity gotchas changed a finding versus a naive read of the data, say so briefly here instead of adding a separate correction section — this prompt already expects that check to happen before publication, not after.
+4. **Methodology & AI Transparency** — Disclose the LLM model name/version (e.g., Claude 3.5 Sonnet), key configuration settings (temperature, token limits), and the exact prompt used to generate this analysis (i.e. this template with $CANDIDATE/$DISTRICT filled in). This transparency allows readers to understand how findings were produced, assess potential model limitations or biases, and reproduce the analysis if desired. If applying `analyze-candidate.rb`'s data-integrity gotchas changed a finding versus a naive read of the data, say so briefly here instead of adding a separate correction section — this prompt already expects that check to happen before publication, not after.
 
 **Tone:** Analytical, conversational for a general political audience. Avoid jargon; explain significance where needed.
 
-**Source:** All data from FEC and House Ethics Committee disclosures in the `[CANDIDATE_DIR]/` directory."
+**Source:** All data from FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory."

@@ -336,8 +336,10 @@ class FecAnalyzer
 
   def committee_name_for(id)
     %w[schedule_a schedule_b efile].each do |schedule|
-      Dir.glob(File.join(@fec_dir, id, "#{schedule}-*.csv")).each do |path|
-        CSV.foreach(path, headers: true) do |row|
+      Dir.glob(File.join(@fec_dir, id, "#{schedule}-*")).each do |path|
+        csv_data = read_csv_file(path)
+        next unless csv_data
+        CSV.parse(csv_data, headers: true) do |row|
           return row["committee_name"].to_s.strip unless row["committee_name"].to_s.strip.empty?
         end
       end
@@ -346,9 +348,17 @@ class FecAnalyzer
   end
 
   def load_rows(committee, schedule)
-    Dir.glob(File.join(committee.dir, "#{schedule}-*.csv")).flat_map do |path|
-      CSV.read(path, headers: true).map(&:to_h)
+    Dir.glob(File.join(committee.dir, "#{schedule}-*")).flat_map do |path|
+      csv_data = read_csv_file(path)
+      next unless csv_data
+      CSV.parse(csv_data, headers: true).map(&:to_h)
     end
+  end
+
+  def read_csv_file(filepath)
+    File.read(filepath)
+  rescue StandardError
+    nil
   end
 
   def decimal(value)

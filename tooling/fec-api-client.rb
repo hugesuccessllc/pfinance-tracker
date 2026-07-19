@@ -234,9 +234,10 @@ class FecApiClient
       # Append data rows incrementally
       if results.any? && headers
         File.open(filepath, "a") do |f|
-          CSV.new(f) do |csv|
-            results.each { |row| csv << headers.map { |h| row[h] } }
-          end
+          csv = CSV.new(f)
+          results.each { |row| csv << headers.map { |h| row[h] } }
+          csv.flush
+          f.flush
         end
         total_rows += results.length
       end

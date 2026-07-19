@@ -111,9 +111,17 @@ ruby tooling/fec-api-client.rb \
 | `--list-files` | Show what CSVs have been downloaded |
 | `--help` | Show all flags |
 
-**Caching:**
+**Caching and cycle top-ups:**
 
-Before downloading a committee, the tool searches the repo for existing cached data. If found, it copies the cached directory instead of making API calls. This saves quota and time for committees that appear in multiple candidate directories. Cached data is identified by matching committee ID and the presence of valid FEC files (schedules or efiles).
+Every committee directory tracks which cycles it has via a `.cycles-downloaded` manifest (a cycle year like `2026`, several comma-separated years, or `ALL` for unscoped downloads). Before downloading, the tool checks this manifest and does the cheapest thing that's still correct:
+
+- **Already covered** (same cycle requested again, or full history already present) — skips the download entirely.
+- **New cycle, other cycles already present** — fetches only the new cycle and adds it alongside the existing files. For example, if you already have `--cycle 2026` downloaded and later add `--cycle 2024`, both live in the same directory as separate files.
+- **Full history requested, only partial cycles cached** — a full download re-fetches every cycle including ones already present, so the tool deletes the superseded partial files first (printing what it removed) rather than leaving overlapping data behind. This matters because `analyze-candidate.rb` concatenates every `schedule_*.csv` file in a directory without deduping across files — two files covering the same cycle would silently double-count transactions.
+
+This also means you can safely start with `--cycle 2026` for a quick current-cycle report, then later re-run without `--cycle` for a full-history deep dive — the tool handles the transition itself.
+
+The tool also searches the rest of the repo for a cached copy of a committee (useful when the same committee appears under multiple candidate directories, e.g. a shared joint fundraising committee). It only reuses a cross-repo cache if that cache's manifest actually covers what you asked for; otherwise it downloads fresh rather than copying something insufficient.
 
 **Workflow example:**
 

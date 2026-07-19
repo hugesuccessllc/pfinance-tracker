@@ -43,25 +43,29 @@ class FecApiClient
     end
     puts "=" * 80
 
-    # Check for cached data in repo
-    cached_dir = find_cached_committee(committee_id)
-    if cached_dir && cached_dir != committee_dir
-      puts "Found cached data: #{cached_dir}"
-      puts "Copying to: #{committee_dir}"
-      FileUtils.mkdir_p(output_dir)
-      FileUtils.cp_r(cached_dir, committee_dir)
-      puts "✓ Cached data copied (skipped API download)"
-      puts
+    if Dir.exist?(committee_dir) && Dir.glob(File.join(committee_dir, "schedule_*.csv")).any?
+      resolve_local_download(committee_id, committee_dir, cycle)
     else
-      FileUtils.mkdir_p(committee_dir)
-      puts "Output: #{committee_dir}"
-      puts
+      # Check for cached data elsewhere in repo — only use it if its manifest actually
+      # covers what we need; otherwise fall through to a fresh local download.
+      cached_dir = find_cached_committee(committee_id, cycle: cycle)
+      cached_manifest = cached_dir ? read_cycles_manifest(cached_dir) : nil
 
-      SCHEDULES.each do |schedule|
-        download_schedule(schedule, committee_id, committee_dir, cycle: cycle)
+      if cached_dir && manifest_covers?(cached_manifest, cycle)
+        puts "Found cached data: #{cached_dir}"
+        puts "Copying to: #{committee_dir}"
+        FileUtils.mkdir_p(output_dir)
+        FileUtils.cp_r(cached_dir, committee_dir)
+        puts "✓ Cached data copied (skipped API download)"
+        puts
+      else
+        FileUtils.mkdir_p(committee_dir)
+        puts "Output: #{committee_dir}"
+        puts
+
+        perform_download(committee_id, committee_dir, cycle)
+        write_cycles_manifest(committee_dir, cycle ? Set[cycle] : :all)
       end
-
-      download_efile_data(committee_id, committee_dir)
     end
 
     # Mark as principal committee if requested
@@ -156,22 +160,104 @@ class FecApiClient
     nil
   end
 
-  # Search repo for cached committee data
-  def find_cached_committee(committee_id)
-    # Search from git root for directories matching committee ID
+  # Search repo for cached committee data. Prefers a cache whose manifest already
+  # covers the requested cycle (or full history); falls back to any cache with data
+  # if none is sufficient, letting the caller decide whether to use it.
+  def find_cached_committee(committee_id, cycle: nil)
     git_root = `git rev-parse --show-toplevel 2>/dev/null`.strip
     return nil if git_root.empty?
 
-    # Look for committee directories in fec subdirectories
-    Dir.glob(File.join(git_root, "**/fec/#{committee_id}")).each do |dir|
-      next unless File.directory?(dir)
-      # Verify it has FEC data (schedule or efile files)
-      has_data = Dir.glob(File.join(dir, "schedule_*.csv")).any? ||
-                 Dir.glob(File.join(dir, "efile-*.csv")).any?
-      return dir if has_data
+    candidates = Dir.glob(File.join(git_root, "**/fec/#{committee_id}")).select do |dir|
+      File.directory?(dir) &&
+        (Dir.glob(File.join(dir, "schedule_*.csv")).any? || Dir.glob(File.join(dir, "efile-*.csv")).any?)
     end
 
-    nil
+    candidates.find { |dir| manifest_covers?(read_cycles_manifest(dir), cycle) } || candidates.first
+  end
+
+  # Cycle manifest tracks which two_year_transaction_period values a committee
+  # directory's schedule files already cover, so we never re-download a cycle we
+  # have, and never let an overlapping cycle land in two files (which would double-
+  # count transactions, since analyze-candidate.rb concatenates all schedule_*.csv
+  # files in a directory without deduping across files).
+  def read_cycles_manifest(committee_dir)
+    path = File.join(committee_dir, ".cycles-downloaded")
+    return nil unless File.exist?(path)
+
+    content = File.read(path).strip
+    return :all if content == "ALL"
+    return Set.new if content.empty?
+
+    Set.new(content.split(",").map(&:to_i))
+  end
+
+  def write_cycles_manifest(committee_dir, cycles_or_all)
+    path = File.join(committee_dir, ".cycles-downloaded")
+    File.write(path, cycles_or_all == :all ? "ALL" : cycles_or_all.to_a.sort.join(","))
+  end
+
+  # true if the manifest already has everything a request for `cycle` needs
+  # (nil cycle means "full history requested", which only :all satisfies)
+  def manifest_covers?(manifest, cycle)
+    return true if manifest == :all
+    return false if manifest.nil? || cycle.nil?
+
+    manifest.include?(cycle)
+  end
+
+  # Decide whether an existing local committee directory already satisfies this
+  # request, needs a disjoint top-up (new cycle, existing cycles untouched), or
+  # needs a full re-download that supersedes (and removes) partial cycle data.
+  def resolve_local_download(committee_id, committee_dir, cycle)
+    manifest = read_cycles_manifest(committee_dir)
+
+    if manifest_covers?(manifest, cycle)
+      puts "✓ Already have #{cycle ? "cycle #{cycle}" : "full history"} for #{committee_id} locally — skipping download"
+      puts
+      return
+    end
+
+    if cycle && manifest.is_a?(Set)
+      puts "Have cycles #{manifest.to_a.sort.join(", ")} locally; fetching cycle #{cycle} to add..."
+      puts
+      download_schedule("schedule_a", committee_id, committee_dir, cycle: cycle)
+      download_schedule("schedule_b", committee_id, committee_dir, cycle: cycle)
+      write_cycles_manifest(committee_dir, manifest + Set[cycle])
+      return
+    end
+
+    # Full history requested but only partial cycles (or no manifest at all, e.g.
+    # data predating this feature) are on disk. Supersede rather than append, since
+    # a full pull re-fetches every cycle including the ones already present.
+    if manifest.is_a?(Set)
+      puts "Full history requested but only cycles #{manifest.to_a.sort.join(", ")} are cached locally."
+    else
+      puts "Existing data has no cycle manifest (predates cycle tracking) — treating as incomplete."
+    end
+    superseded = Dir.glob(File.join(committee_dir, "schedule_*.csv*"))
+    if superseded.any?
+      puts "Removing #{superseded.length} superseded file(s) before full download: #{superseded.map { |f| File.basename(f) }.join(", ")}"
+      superseded.each { |f| File.delete(f) }
+    end
+    puts
+
+    perform_download(committee_id, committee_dir, cycle)
+    write_cycles_manifest(committee_dir, cycle ? Set[cycle] : :all)
+  end
+
+  # Fetch schedule_a/schedule_b (optionally cycle-scoped) plus efile data. Efile
+  # filings aren't cycle-filterable and analyze-candidate.rb doesn't read them for
+  # totals anyway (see its header comments), so skip re-fetching if any are present.
+  def perform_download(committee_id, committee_dir, cycle)
+    SCHEDULES.each do |schedule|
+      download_schedule(schedule, committee_id, committee_dir, cycle: cycle)
+    end
+
+    if Dir.glob(File.join(committee_dir, "efile-*.csv")).empty?
+      download_efile_data(committee_id, committee_dir)
+    else
+      puts "Efile data already present locally — skipping efile re-fetch"
+    end
   end
 
   # List downloaded files in an FEC directory

@@ -109,7 +109,7 @@ Every `$CANDIDATE` / `$DISTRICT` below is that same substitution. `$CANDIDATE_DI
 **Output:**
 - Format: Markdown
 - Filename: `$CANDIDATE_DIR/README.md`
-- Length: Roughly 1,000-1,500 words — a complete Methodology & AI Transparency section (including the full verbatim prompt) matters more than hitting the low end.
+- Length: Main analysis should be roughly 1,000-1,500 words. The complete Methodology & AI Transparency section (including the full verbatim prompt) doesn't count against this word limit.
 - Title: `$DISTRICT: $CANDIDATE — Financial Disclosure Summary`
 
 **Content sections (in this order):**

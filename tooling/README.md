@@ -59,7 +59,7 @@ ruby tooling/analyze-candidate.rb \
 
 ## fec-api-client.rb
 
-**Purpose:** Automatically downloads raw efile data plus Schedule A (receipts) and Schedule B (disbursements) data from the FEC via the OpenFEC API, then discovers linked committees.
+**Purpose:** Automatically downloads raw efile data plus Schedule A (receipts) and Schedule B (disbursements) data from the FEC via the OpenFEC API for a committee, plus (optionally) financial totals for that committee's affiliated JFC/leadership PAC.
 
 **Setup:**
 
@@ -76,21 +76,14 @@ export FEC_API_KEY="your-api-key-here"
 **Usage:**
 
 ```bash
-# Step 1: Download committee data
+# Step 1: Download the principal committee's data, plus its affiliated committee's totals
 ruby tooling/fec-api-client.rb \
   --download \
   --committee-id C00719294 \
-  --output-dir tx-11/august-pfluger/fec
+  --output-dir tx-11/august-pfluger/fec \
+  --principal --with-affiliated --cycle 2026
 
-# Step 2: Find linked committees (those that received transfers/donations)
-ruby tooling/fec-api-client.rb \
-  --fec-dir tx-11/august-pfluger/fec \
-  --list-linked
-
-# Output: List of linked committee IDs + ready-to-copy download commands
-# Copy those commands and run them to recursively download the full network
-
-# Step 3 (optional): Verify what's been downloaded
+# Step 2 (optional): Verify what's been downloaded
 ruby tooling/fec-api-client.rb \
   --fec-dir tx-11/august-pfluger/fec \
   --list-files
@@ -104,12 +97,18 @@ ruby tooling/fec-api-client.rb \
 | `--committee-id ID` | Committee ID to download (e.g., `C00719294`) |
 | `--output-dir DIR` | Base directory; committee subdir will be created |
 | `-p`, `--principal` | Mark this as the principal (main) candidate committee; creates a `PRINCIPAL` marker file |
-| `--with-linked` | Auto-discover and download all linked committees found in Schedule B transfers; recursively downloads the entire committee network |
-| `--cycle YYYY` | Scope the download to a single 2-year cycle via the API's `two_year_transaction_period` filter (applies to linked committees too). Dramatically reduces API calls for committees with multi-cycle history — use this for current-cycle-only reports. |
-| `--fec-dir DIR` | Directory to scan for linked committees (manual mode only) |
-| `--list-linked` | Discover committees referenced in downloaded filings (manual mode only) |
+| `--with-affiliated` | Look up the principal's `affiliated_committee_name` (a JFC or leadership PAC, self-reported on the committee's Form 1) and resolve it to a committee ID via FEC's committee name search, then fetch that committee's financial **totals only** — not itemized Schedule A/B. See "Affiliated committees" below for why. |
+| `--affiliated-committee-id ID` | Skip the name search; fetch totals for this specific committee ID as the affiliated committee (use when the name search is ambiguous, or you already know the ID) |
+| `--cycle YYYY` | Scope the download to a single 2-year cycle via the API's `two_year_transaction_period` filter (applies to the affiliated committee's totals too). Dramatically reduces API calls for committees with multi-cycle history — use this for current-cycle-only reports. |
+| `--fec-dir DIR` | Directory to inspect (with `--list-files`) |
 | `--list-files` | Show what CSVs have been downloaded |
 | `--help` | Show all flags |
+
+**Affiliated committees: totals only, by design.**
+
+An earlier version of this tool had a `--with-linked` flag that recursively crawled every committee referenced as a Schedule B transfer recipient — donor PACs, party committees, anything. In practice this pulled in large, unrelated committees (e.g. the NRCC) just because a candidate's JFC wrote them a check, ballooning downloads without adding much insight into *that candidate's* operation. It's been replaced with `--with-affiliated`, which asks a narrower question: "what JFC or leadership PAC does this candidate's own filing say it's affiliated with?" — using the `affiliated_committee_name` field FEC's own data model provides for exactly this relationship, resolved to a committee ID via name search.
+
+Because a JFC's own transaction volume can be as large as (or larger than) the principal committee's, `--with-affiliated` fetches only that committee's `/committee/{id}/totals/` — receipts, disbursements, cash-on-hand per cycle — saved to `fec/<affiliated-id>/totals.json`, with an `AFFILIATED` marker file alongside it (parallel to `PRINCIPAL`). No itemized Schedule A/B rows are downloaded for it. `analyze-candidate.rb` reports these totals in a separate "AFFILIATED COMMITTEES" section rather than folding them into itemized donor/spending analysis. If you want full itemized detail for an affiliated committee, run `--download --committee-id <that-id>` directly instead — that gets you the normal itemized treatment.
 
 **Caching and cycle top-ups:**
 
@@ -126,20 +125,12 @@ The tool also searches the rest of the repo for a cached copy of a committee (us
 **Workflow example:**
 
 ```bash
-# Download principal committee + auto-discover and download all linked committees in one command
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked
-
-# The --with-linked flag automatically discovers all committees referenced in Schedule B transfers
-# (PACs, party committees, transfer recipients, etc.) and downloads them recursively.
-# All committees end up in the same fec/ directory.
-
-# For a current-cycle-only report, scope the download itself to that cycle — cuts API calls
-# roughly in proportion to how many cycles the committee has been active (e.g. ~4x fewer calls
-# for a committee with 2020/2022/2024/2026 history when scoped to just 2026):
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked --cycle 2026
+# Download principal committee (itemized) + affiliated committee (totals only),
+# scoped to the current cycle to conserve API quota:
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-affiliated --cycle 2026
 
 # Then feed the full collected FEC directory to analyze-candidate.rb
-ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --cycle 2026
 ```
 
 **Progress tracking:**
@@ -172,4 +163,4 @@ If a download is interrupted by rate limiting, the partial CSV and its `.meta` f
 - All files saved as uncompressed CSVs for direct file searching and grepping.
 - No manual FEC website clicking needed — fully automated API-based download.
 - API is rate-limited (HTTP 429): 1,000 calls/hour for a personal key (40/hour for `DEMO_KEY`; email apiinfo@fec.gov for a 7,200/hour upgraded key). The tool paces successive page requests (0.5s apart) to avoid tripping short-window burst limits, and retries 429s with exponential backoff (1s, 2s, 4s, 8s, 16s, up to 5 retries) as a fallback. Pacing and backoff both reduce *how often* you hit 429, but the real lever for large committees is `--cycle` — it cuts the number of pages fetched in the first place.
-- Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes. Large committees with linked networks may take longer due to rate limiting.
+- Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes. `--with-affiliated` adds only a few quick API calls (committee detail, name search, totals) regardless of how large the affiliated committee's own itemized history is, since no itemized data is fetched for it.

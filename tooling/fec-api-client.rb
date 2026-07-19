@@ -32,7 +32,7 @@ class FecApiClient
   end
 
   # Download all schedule data for a committee via the OpenFEC API
-  def download_committee_data(committee_id, output_dir, principal: false, with_linked: false, cycle: nil)
+  def download_committee_data(committee_id, output_dir, principal: false, with_affiliated: false, affiliated_committee_id: nil, cycle: nil)
     committee_dir = File.join(output_dir, committee_id)
 
     puts "=" * 80
@@ -81,78 +81,126 @@ class FecApiClient
     progress_marker = File.join(committee_dir, ".download-progress")
     File.write(progress_marker, "timestamp: #{Time.now.iso8601}\ncommittee_id: #{committee_id}\nstatus: complete\n")
 
-    # Auto-discover and download linked committees if requested
-    if with_linked
+    # Auto-discover (by name) or directly fetch the principal's affiliated committee
+    # (JFC, leadership PAC) if requested. Deliberately NOT a recursive Schedule-B
+    # transfer crawl — that approach (kept in git history, since removed) pulled in
+    # every committee a transfer ever touched, including large unrelated ones like
+    # the NRCC, which isn't "this candidate's" committee just because they wrote it
+    # a check. Only totals are fetched for the affiliated committee, not itemized
+    # Schedule A/B — see download_committee_totals.
+    if with_affiliated || affiliated_committee_id
       puts "\n" + "=" * 80
-      puts "DISCOVERING LINKED COMMITTEES"
+      puts "AFFILIATED COMMITTEE"
       puts "=" * 80
-      linked = find_linked_committees(output_dir)
-      linked_to_download = linked.reject { |c| c == committee_id }
 
-      if linked_to_download.any?
-        puts "Found #{linked_to_download.length} linked committee(s):"
-        linked_to_download.each do |c|
-          puts "  - #{c}"
-          download_committee_data(c, output_dir, principal: false, with_linked: false, cycle: cycle)
-        end
+      target_id = affiliated_committee_id
+      unless target_id
+        match = discover_affiliated_committee(committee_id)
+        target_id = match && match["committee_id"]
+      end
+
+      if target_id
+        download_committee_totals(target_id, output_dir, cycle: cycle)
       else
-        puts "No linked committees found."
+        puts "No affiliated committee to download."
       end
     end
 
     puts "\n✓ Download complete"
   end
 
-  # Find linked committees in downloaded FEC data
-  def find_linked_committees(fec_dir)
-    linked = Set.new
+  # Fetch a committee's own detail record, which (when the filer supplied it on
+  # their Form 1) includes affiliated_committee_name — free-text naming a JFC or
+  # leadership PAC the committee is tied to. There is no structured committee-ID
+  # field for this relationship; resolving the name to an ID requires a separate
+  # committee name search (see discover_affiliated_committee).
+  def fetch_committee_detail(committee_id)
+    url = "#{BASE_URL}/committee/#{committee_id}/?api_key=#{@api_key}"
+    (fetch_url(url)["results"] || []).first
+  end
 
-    # Search all schedule_b files for transfers to other committees
-    Dir.glob(File.join(fec_dir, "*", "schedule_b-*.csv")).each do |file|
-      begin
-        csv_data = read_csv_file(file)
-        next unless csv_data
+  # Resolve a committee's affiliated_committee_name (see fetch_committee_detail) to
+  # an actual committee ID via FEC's committee name search. Prefers an exact
+  # case-insensitive name match; if the search returns several plausible matches
+  # with none exact, prints them and asks the human to pick via
+  # --affiliated-committee-id rather than guessing.
+  #
+  # affiliated_committee_name is filer-supplied free text and doesn't always match
+  # the affiliated committee's actual registered name — e.g. August Pfluger's
+  # principal committee lists "PFLUGER VICTORY FUND", but the JFC is registered as
+  # "PFLUGER VICTORY COMMITTEE". A full-phrase search for the exact string can
+  # return zero results even though the committee exists, because the search
+  # doesn't fuzzy-match a wrong trailing word. If the full name draws a blank, retry
+  # once with the last word dropped (candidate/JFC names are conventionally
+  # "<surname> <word> <word>", so the earlier words are the more reliable anchor).
+  def discover_affiliated_committee(committee_id)
+    detail = fetch_committee_detail(committee_id)
+    name = detail && detail["affiliated_committee_name"].to_s.strip
 
-        CSV.parse(csv_data, headers: true) do |row|
-          # Look for recipient committee IDs (linked committees)
-          if (committee_id = row["recipient_committee_id"])&.match?(/^C\d{6,}/)
-            linked << committee_id.strip
-          end
-
-          # Also look for disbursements marked as transfers
-          if row["disbursement_type_description"]&.include?("Transfer")
-            recipient = row["recipient_name"]&.strip
-            # Try to extract committee ID from recipient name
-            if recipient&.match?(/^C\d{6,}/)
-              linked << recipient.strip
-            end
-          end
-        end
-      rescue StandardError => e
-        # Skip on error
-      end
+    if name.nil? || name.empty?
+      puts "#{committee_id} has no affiliated_committee_name on file."
+      return nil
     end
 
-    # Also search for references in efile raw data
-    Dir.glob(File.join(fec_dir, "*", "efile-*.csv")).each do |file|
-      begin
-        csv_data = read_csv_file(file)
-        next unless csv_data
+    puts "Affiliated committee name on file: \"#{name}\" — searching for its committee ID..."
+    matches = search_committees_by_name(name, exclude: committee_id)
 
-        CSV.parse(csv_data, headers: true) do |row|
-          # Look for committee references in various fields
-          %w[entity_id recipient_committee_id].each do |field|
-            if row[field]&.match?(/^C\d{6,}/)
-              linked << row[field].strip
-            end
-          end
-        end
-      rescue StandardError => e
-        # Efile format may vary, skip errors gracefully
-      end
+    words = name.split(/\s+/)
+    if matches.empty? && words.length > 1
+      trimmed = words[0..-2].join(" ")
+      puts "No match for the full name — retrying with \"#{trimmed}\"..."
+      matches = search_committees_by_name(trimmed, exclude: committee_id)
     end
 
-    linked.reject { |id| id.empty? }.sort
+    exact = matches.select { |c| c["name"].to_s.strip.casecmp?(name) }
+    candidates = exact.any? ? exact : matches
+
+    case candidates.length
+    when 0
+      puts "No committee found matching \"#{name}\"."
+      nil
+    when 1
+      puts "Matched: #{candidates.first["committee_id"]} (#{candidates.first["name"]})"
+      candidates.first
+    else
+      puts "\"#{name}\" matched #{candidates.length} committees — re-run with --affiliated-committee-id to pick one:"
+      candidates.each { |c| puts "  - #{c["committee_id"]} | #{c["name"]} | #{c["state"]} | #{c["designation_full"]}" }
+      nil
+    end
+  end
+
+  def search_committees_by_name(name, exclude: nil)
+    url = "#{BASE_URL}/committees/?q=#{URI.encode_www_form_component(name)}&api_key=#{@api_key}&per_page=20"
+    (fetch_url(url)["results"] || []).reject { |c| c["committee_id"] == exclude }
+  end
+
+  # Fetch committee-level financial totals (receipts/disbursements/cash-on-hand per
+  # cycle) WITHOUT itemized Schedule A/B rows. Used for a candidate's affiliated
+  # committee (JFC, leadership PAC) — enough to see the scale of money moving
+  # through it without pulling its full transaction history, which for some
+  # affiliated committees can dwarf the principal committee's own itemized data.
+  def download_committee_totals(committee_id, output_dir, cycle: nil)
+    committee_dir = File.join(output_dir, committee_id)
+    FileUtils.mkdir_p(committee_dir)
+
+    detail = fetch_committee_detail(committee_id) || {}
+
+    url = "#{BASE_URL}/committee/#{committee_id}/totals/?api_key=#{@api_key}&per_page=100"
+    url += "&cycle=#{cycle}" if cycle
+    totals = fetch_url(url)["results"] || []
+
+    payload = {
+      "committee_id" => committee_id,
+      "name" => detail["name"],
+      "designation_full" => detail["designation_full"],
+      "committee_type_full" => detail["committee_type_full"],
+      "totals_by_cycle" => totals
+    }
+
+    File.write(File.join(committee_dir, "totals.json"), JSON.pretty_generate(payload))
+    File.write(File.join(committee_dir, "AFFILIATED"), "")
+    puts "✓ Saved totals for #{totals.length} cycle(s) to #{committee_id}/totals.json " \
+         "(#{detail["name"] || "name unknown"}) — no itemized data fetched"
   end
 
   # Read CSV file
@@ -536,16 +584,16 @@ if $PROGRAM_NAME == __FILE__
   options = {}
 
   OptionParser.new do |opts|
-    opts.banner = "Usage: fec-api-client.rb [--download | --list-files | --list-linked] [options]"
+    opts.banner = "Usage: fec-api-client.rb [--download | --list-files] [options]"
     opts.on("--download", "Download committee data via OpenFEC API") { options[:download] = true }
     opts.on("--committee-id ID", "FEC committee ID (e.g., C00719294)") { |v| options[:committee_id] = v }
     opts.on("--output-dir DIR", "Base output directory (committee ID subdir will be created)") { |v| options[:output_dir] = v }
     opts.on("-p", "--principal", "Mark this committee as the principal (main) committee") { options[:principal] = true }
-    opts.on("--with-linked", "Auto-discover and download all linked committees found in Schedule B transfers") { options[:with_linked] = true }
-    opts.on("--cycle YYYY", Integer, "Scope download to a single 2-year cycle (fewer API calls; applies to linked committees too)") { |v| options[:cycle] = v }
-    opts.on("--fec-dir DIR", "FEC directory to analyze (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
+    opts.on("--with-affiliated", "Look up the principal's affiliated committee (JFC/leadership PAC, by name) and fetch its financial totals only — not itemized data") { options[:with_affiliated] = true }
+    opts.on("--affiliated-committee-id ID", "Skip name search; fetch totals for this specific committee ID as the affiliated committee") { |v| options[:affiliated_committee_id] = v }
+    opts.on("--cycle YYYY", Integer, "Scope download to a single 2-year cycle (fewer API calls; applies to the affiliated committee's totals too)") { |v| options[:cycle] = v }
+    opts.on("--fec-dir DIR", "FEC directory to inspect (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
     opts.on("--list-files", "List all downloaded CSV files in --fec-dir") { options[:list_files] = true }
-    opts.on("--list-linked", "Find linked committees in downloaded filings (requires --fec-dir)") { options[:list_linked] = true }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -556,27 +604,14 @@ if $PROGRAM_NAME == __FILE__
 
   if options[:download]
     abort "fec-api-client.rb: --download requires --committee-id and --output-dir" unless options[:committee_id] && options[:output_dir]
-    client.download_committee_data(options[:committee_id], options[:output_dir], principal: options[:principal] || false, with_linked: options[:with_linked] || false, cycle: options[:cycle])
+    client.download_committee_data(options[:committee_id], options[:output_dir],
+                                    principal: options[:principal] || false,
+                                    with_affiliated: options[:with_affiliated] || false,
+                                    affiliated_committee_id: options[:affiliated_committee_id],
+                                    cycle: options[:cycle])
 
   elsif options[:fec_dir]
-    if options[:list_linked]
-      puts "Searching for linked committees..."
-      linked = client.find_linked_committees(options[:fec_dir])
-      if linked.empty?
-        puts "No linked committees found."
-      else
-        puts "\nLinked committees found:"
-        linked.each { |c| puts "  - #{c}" }
-        puts "\nDownload these with:"
-        linked.each { |c| puts "  ruby fec-api-client.rb --download --committee-id #{c} --output-dir #{options[:fec_dir]}" }
-      end
-
-    elsif options[:list_files]
-      client.list_downloaded_files(options[:fec_dir])
-
-    else
-      client.list_downloaded_files(options[:fec_dir])
-    end
+    client.list_downloaded_files(options[:fec_dir])
 
   else
     abort "fec-api-client.rb: provide --download, --list-files, or --list-linked (see --help)"

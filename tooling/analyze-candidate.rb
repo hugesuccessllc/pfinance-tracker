@@ -120,6 +120,17 @@
 #      assuming agreement. This matches the script's existing posture toward spots where
 #      the FEC data could be ambiguous or inconsistent: count first, ask questions later.
 #
+#   6. A committee directory can hold either itemized data (schedule_a-*.csv /
+#      schedule_b-*.csv, from a normal fec-api-client.rb download) OR a totals.json (from
+#      `fec-api-client.rb --with-affiliated`, which fetches only receipts/disbursements/
+#      cash-on-hand for a candidate's affiliated JFC/leadership PAC — not itemized rows,
+#      since that data can be as large as the principal committee's own). `committees`
+#      only returns the former; totals-only directories are read separately via
+#      `affiliated_committees` and reported in their own section, NOT folded into
+#      donor/disbursement totals — summing a JFC's un-itemized totals into the same
+#      buckets as the principal committee's itemized rows would conflate two different
+#      kinds of number (aggregate vs. line-item) and silently inflate "committee_totals".
+#
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
 # each participating committee (the candidate's own campaign, a party committee, allied
@@ -168,16 +179,32 @@ class FecAnalyzer
     @donor_type = donor_type
   end
 
+  # Only committees with itemized schedule_a/b data — a committee downloaded via
+  # --with-affiliated has just a totals.json (see affiliated_committees below) and
+  # would otherwise show up here with a misleading $0.00 in every itemized total.
   def committees
     @committees ||= Dir.children(@fec_dir)
                         .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                        .select { |d| Dir.glob(File.join(@fec_dir, d, "schedule_*.csv")).any? }
                         .sort
                         .map { |id| Committee.new(id, committee_name_for(id), File.join(@fec_dir, id)) }
+  end
+
+  # Committees downloaded via --with-affiliated: financial totals only, no itemized
+  # rows. Reported in their own section (see render_affiliated_committees) rather
+  # than folded into the itemized donor/spending analysis above.
+  def affiliated_committees
+    @affiliated_committees ||= Dir.children(@fec_dir)
+                                   .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                                   .select { |d| File.exist?(File.join(@fec_dir, d, "totals.json")) }
+                                   .sort
+                                   .map { |id| load_affiliated_totals(id) }
   end
 
   def run
     if @by_cycle || @cycle
       result = { committees: committees.map { |c| { id: c.id, name: c.name } },
+                 affiliated_committees: affiliated_committees,
                  cycle_integrity: cycle_integrity_check }
       if @by_cycle
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
@@ -192,6 +219,7 @@ class FecAnalyzer
     else
       {
         committees: committees.map { |c| { id: c.id, name: c.name } },
+        affiliated_committees: affiliated_committees,
         donors: analyze_donors,
         disbursements: analyze_disbursements
       }
@@ -215,6 +243,8 @@ class FecAnalyzer
       io.puts "Report scoped to FEC 2-year cycle: #{data[:cycle]}"
       io.puts
     end
+
+    render_affiliated_committees(io, data[:affiliated_committees])
 
     if data[:by_cycle]
       data[:by_cycle].each do |cyc, section|
@@ -332,6 +362,31 @@ class FecAnalyzer
       end
     end
     { mismatch_count: mismatches.size, examples: mismatches.first(5) }
+  end
+
+  # Reads fec/<id>/totals.json (written by fec-api-client.rb's --with-affiliated)
+  # and picks the cycle matching @cycle, or the most recent one if no --cycle was
+  # given. Returns an :error entry rather than raising if the file is missing or
+  # malformed, so one bad affiliated-committee download doesn't crash the whole run.
+  def load_affiliated_totals(id)
+    data = JSON.parse(File.read(File.join(@fec_dir, id, "totals.json")))
+    by_cycle = data["totals_by_cycle"] || []
+    entry = @cycle ? by_cycle.find { |t| t["cycle"].to_i == @cycle.to_i } : by_cycle.max_by { |t| t["cycle"].to_i }
+
+    {
+      id: id,
+      name: data["name"] || id,
+      designation: data["designation_full"],
+      cycle: entry && entry["cycle"],
+      receipts: entry && entry["receipts"],
+      disbursements: entry && entry["disbursements"],
+      # PAC/JFC totals use last_cash_on_hand_end_period; principal committees use
+      # cash_on_hand_end_period. Field name depends on committee_type, not consistent
+      # across the API — check both rather than assuming one.
+      cash_on_hand_end_period: entry && (entry["cash_on_hand_end_period"] || entry["last_cash_on_hand_end_period"])
+    }
+  rescue StandardError => e
+    { id: id, name: id, error: e.message }
   end
 
   def committee_name_for(id)
@@ -542,6 +597,30 @@ class FecAnalyzer
       top_vendors: vendor_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| vendor_meta[payee].merge(payee: payee, total: total) },
       by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total } }
     }
+  end
+
+  def render_affiliated_committees(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "AFFILIATED COMMITTEES (totals only, not itemized — see fec/<id>/totals.json)"
+    io.puts "=" * 80
+    list.each do |c|
+      if c[:error]
+        io.puts "#{c[:name]} [#{c[:id]}]: could not read totals.json (#{c[:error]})"
+      elsif c[:cycle].nil?
+        io.puts "#{c[:name]} [#{c[:id]}] (#{c[:designation]}): no totals for the requested cycle"
+      else
+        io.puts "#{c[:name]} [#{c[:id]}] (#{c[:designation]}), cycle #{c[:cycle]}: " \
+                "receipts #{money_or_na(c[:receipts])}, disbursements #{money_or_na(c[:disbursements])}, " \
+                "cash on hand #{money_or_na(c[:cash_on_hand_end_period])}"
+      end
+    end
+    io.puts
+  end
+
+  def money_or_na(value)
+    value.nil? ? "n/a" : money(BigDecimal(value.to_s))
   end
 
   def print_committee_totals(io, title, totals)

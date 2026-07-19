@@ -33,7 +33,7 @@ Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download commit
 - Raw efile CSVs (comprehensive line-item filings)
 - Schedule A (receipts/contributions)
 - Schedule B (disbursements)
-- Linked committee discovery (to find related PACs, transfer recipients, etc.)
+- Financial totals (not itemized detail) for the candidate's affiliated JFC/leadership PAC, if any
 
 **Setup:** Get a free API key at https://api.data.gov/ (takes 30 seconds), then:
 
@@ -41,21 +41,21 @@ Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download commit
 echo "your-api-key-here" > .fec_api_key
 ```
 
-**Quick start:** Download a committee and all linked committees (PACs, party committees, transfer recipients, etc.) in one command, scoped to the current cycle to conserve API quota:
+**Quick start:** Download the principal committee's itemized data, plus totals for its affiliated committee, scoped to the current cycle to conserve API quota:
 
 ```bash
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked --cycle 2026
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-affiliated --cycle 2026
 ```
 
-The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--with-linked` flag auto-discovers and downloads all committees referenced in Schedule B transfers, recursively building the complete committee network. All committees are saved to the same `fec/` directory. The `--cycle` flag filters at the API level, cutting the number of pages (and API calls) fetched roughly in proportion to how many cycles the committee has been active — important since the standard API key allows only 1,000 calls/hour.
+The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--cycle` flag filters at the API level, cutting the number of pages (and API calls) fetched roughly in proportion to how many cycles the committee has been active — important since the standard API key allows only 1,000 calls/hour.
 
-**Complete funding picture:** Using `--with-linked` ensures you capture all funding flows — not just direct contributions to the principal committee, but also money flowing through allied PACs, party committees, and other linked entities. This is critical for understanding 2026 funding since, for well-funded candidates, most of the action often comes from these linked committees.
+**Affiliated committee, not the whole network:** `--with-affiliated` reads the principal committee's own `affiliated_committee_name` field (e.g. a joint fundraising committee or leadership PAC the candidate reports being tied to on their Form 1), resolves that name to a committee ID via FEC's committee search, and downloads only that committee's financial **totals** — receipts, disbursements, cash-on-hand — not its itemized transactions. An earlier version of this tool recursively crawled every committee that ever appeared as a Schedule B transfer recipient, which pulled in large, unrelated committees (e.g. the NRCC) just because a candidate's JFC wrote them a check. That approach is gone; `--with-affiliated` answers a narrower, more useful question — "what's the candidate's own committee, beyond the principal one?" — without downloading data for every entity that money merely passed through. If you want full itemized detail for the affiliated committee too, run `--download --committee-id <that-id>` directly and it'll get the normal itemized treatment.
 
 **Local caching:** If a committee ID appears in multiple candidate directories, the tool searches your repo for existing cached data and copies it instead of re-downloading, saving API quota.
 
-**Rate limits:** The standard API key allows 1,000 calls/hour. Downloads are paced automatically to avoid tripping burst limits and retry on HTTP 429, but if you exhaust the hourly quota entirely, wait for it to reset (or email apiinfo@fec.gov for a 7,200/hour upgraded key). Interrupted downloads leave partial CSVs on disk (tracked via `.meta` files) but re-running starts a fresh file rather than resuming — use `--cycle` to keep downloads small enough to complete in one pass.
+**Rate limits:** The standard API key allows 1,000 calls/hour. Downloads are paced automatically to avoid tripping burst limits and retry on HTTP 429 (and on transient 502/503/504 gateway errors), but if you exhaust the hourly quota entirely, wait for it to reset (or email apiinfo@fec.gov for a 7,200/hour upgraded key). Interrupted downloads leave partial CSVs on disk (tracked via `.meta` files) but re-running starts a fresh file rather than resuming — use `--cycle` to keep downloads small enough to complete in one pass.
 
-For full documentation, flags, and linked-committee discovery, see [tooling/README.md](tooling/README.md).
+For full documentation and flags, see [tooling/README.md](tooling/README.md).
 
 ### Manual Way
 

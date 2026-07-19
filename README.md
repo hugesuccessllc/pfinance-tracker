@@ -41,17 +41,19 @@ Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download commit
 echo "your-api-key-here" > .fec_api_key
 ```
 
-**Quick start:** Download a committee and all linked committees (PACs, party committees, transfer recipients, etc.) in one command:
+**Quick start:** Download a committee and all linked committees (PACs, party committees, transfer recipients, etc.) in one command, scoped to the current cycle to conserve API quota:
 
 ```bash
-ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked --cycle 2026
 ```
 
-The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--with-linked` flag auto-discovers and downloads all committees referenced in Schedule B transfers, recursively building the complete committee network. All committees are saved to the same `fec/` directory.
+The `--principal` flag marks the principal committee with a `PRINCIPAL` marker file. The `--with-linked` flag auto-discovers and downloads all committees referenced in Schedule B transfers, recursively building the complete committee network. All committees are saved to the same `fec/` directory. The `--cycle` flag filters at the API level, cutting the number of pages (and API calls) fetched roughly in proportion to how many cycles the committee has been active — important since the standard API key allows only 1,000 calls/hour.
 
 **Complete funding picture:** Using `--with-linked` ensures you capture all funding flows — not just direct contributions to the principal committee, but also money flowing through allied PACs, party committees, and other linked entities. This is critical for understanding 2026 funding since, for well-funded candidates, most of the action often comes from these linked committees.
 
 **Local caching:** If a committee ID appears in multiple candidate directories, the tool searches your repo for existing cached data and copies it instead of re-downloading, saving API quota.
+
+**Rate limits:** The standard API key allows 1,000 calls/hour. Downloads are paced automatically to avoid tripping burst limits and retry on HTTP 429, but if you exhaust the hourly quota entirely, wait for it to reset (or email apiinfo@fec.gov for a 7,200/hour upgraded key). Interrupted downloads leave partial CSVs on disk (tracked via `.meta` files) but re-running starts a fresh file rather than resuming — use `--cycle` to keep downloads small enough to complete in one pass.
 
 For full documentation, flags, and linked-committee discovery, see [tooling/README.md](tooling/README.md).
 

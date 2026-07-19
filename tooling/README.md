@@ -105,6 +105,7 @@ ruby tooling/fec-api-client.rb \
 | `--output-dir DIR` | Base directory; committee subdir will be created |
 | `-p`, `--principal` | Mark this as the principal (main) candidate committee; creates a `PRINCIPAL` marker file |
 | `--with-linked` | Auto-discover and download all linked committees found in Schedule B transfers; recursively downloads the entire committee network |
+| `--cycle YYYY` | Scope the download to a single 2-year cycle via the API's `two_year_transaction_period` filter (applies to linked committees too). Dramatically reduces API calls for committees with multi-cycle history — use this for current-cycle-only reports. |
 | `--fec-dir DIR` | Directory to scan for linked committees (manual mode only) |
 | `--list-linked` | Discover committees referenced in downloaded filings (manual mode only) |
 | `--list-files` | Show what CSVs have been downloaded |
@@ -123,6 +124,11 @@ ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir 
 # The --with-linked flag automatically discovers all committees referenced in Schedule B transfers
 # (PACs, party committees, transfer recipients, etc.) and downloads them recursively.
 # All committees end up in the same fec/ directory.
+
+# For a current-cycle-only report, scope the download itself to that cycle — cuts API calls
+# roughly in proportion to how many cycles the committee has been active (e.g. ~4x fewer calls
+# for a committee with 2020/2022/2024/2026 history when scoped to just 2026):
+ruby tooling/fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec --principal --with-linked --cycle 2026
 
 # Then feed the full collected FEC directory to analyze-candidate.rb
 ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
@@ -146,9 +152,9 @@ rows_written: 20600
 status: in_progress
 ```
 
-If a download is interrupted by rate limiting, you can:
-1. Wait for API quota to reset (rolling 1-hour window)
-2. Re-run the same download command — it will resume and write to the same CSV file
+If a download is interrupted by rate limiting, the partial CSV and its `.meta` file remain on disk (useful for inspection), but **re-running the command does not resume that file** — it starts a fresh timestamped CSV from page 1. To avoid burning quota on repeat full downloads:
+1. Wait for API quota to reset (rolling 1-hour window), then re-run
+2. Use `--cycle YYYY` to scope to one cycle instead of full history — this is usually the real fix, since most quota exhaustion comes from paging through cycles you don't need for a current-cycle report
 
 **Notes:**
 
@@ -157,5 +163,5 @@ If a download is interrupted by rate limiting, you can:
   - Structured schedules: `schedule_a-2026-07-19T14-30-05Z.csv`, `schedule_b-...csv` (parsed transactional data)
 - All files saved as uncompressed CSVs for direct file searching and grepping.
 - No manual FEC website clicking needed — fully automated API-based download.
-- API is rate-limited (HTTP 429). The tool automatically retries with exponential backoff (waits 1s, 2s, 4s, 8s, 16s between retries, up to 5 retries).
+- API is rate-limited (HTTP 429): 1,000 calls/hour for a personal key (40/hour for `DEMO_KEY`; email apiinfo@fec.gov for a 7,200/hour upgraded key). The tool paces successive page requests (0.5s apart) to avoid tripping short-window burst limits, and retries 429s with exponential backoff (1s, 2s, 4s, 8s, 16s, up to 5 retries) as a fallback. Pacing and backoff both reduce *how often* you hit 429, but the real lever for large committees is `--cycle` — it cuts the number of pages fetched in the first place.
 - Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes. Large committees with linked networks may take longer due to rate limiting.

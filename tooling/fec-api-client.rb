@@ -22,6 +22,7 @@ class FecApiClient
   BASE_URL = "https://api.open.fec.gov/v1"
   SCHEDULES = ["schedule_a", "schedule_b"].freeze
   PAGE_SIZE = 100  # Max records per API request (0-100)
+  REQUEST_PACING_SECONDS = 0.5  # Delay between successful requests to avoid tripping burst limits
 
   def initialize(api_key_file: ".fec_api_key")
     @api_key = load_api_key(api_key_file)
@@ -29,13 +30,16 @@ class FecApiClient
   end
 
   # Download all schedule data for a committee via the OpenFEC API
-  def download_committee_data(committee_id, output_dir, principal: false, with_linked: false)
+  def download_committee_data(committee_id, output_dir, principal: false, with_linked: false, cycle: nil)
     committee_dir = File.join(output_dir, committee_id)
 
     puts "=" * 80
     puts "DOWNLOADING DATA FOR COMMITTEE #{committee_id}"
     if principal
       puts "  [PRINCIPAL COMMITTEE]"
+    end
+    if cycle
+      puts "  [CYCLE #{cycle} ONLY]"
     end
     puts "=" * 80
 
@@ -54,7 +58,7 @@ class FecApiClient
       puts
 
       SCHEDULES.each do |schedule|
-        download_schedule(schedule, committee_id, committee_dir)
+        download_schedule(schedule, committee_id, committee_dir, cycle: cycle)
       end
 
       download_efile_data(committee_id, committee_dir)
@@ -83,7 +87,7 @@ class FecApiClient
         puts "Found #{linked_to_download.length} linked committee(s):"
         linked_to_download.each do |c|
           puts "  - #{c}"
-          download_committee_data(c, output_dir, principal: false, with_linked: false)
+          download_committee_data(c, output_dir, principal: false, with_linked: false, cycle: cycle)
         end
       else
         puts "No linked committees found."
@@ -196,8 +200,8 @@ class FecApiClient
 
   private
 
-  def download_schedule(schedule, committee_id, output_dir)
-    puts "Downloading #{schedule}..."
+  def download_schedule(schedule, committee_id, output_dir, cycle: nil)
+    puts "Downloading #{schedule}#{cycle ? " (cycle #{cycle})" : ""}..."
 
     filename = "#{schedule}-#{Time.now.iso8601}.csv"
     filepath = File.join(output_dir, filename)
@@ -214,6 +218,7 @@ class FecApiClient
             "&per_page=#{PAGE_SIZE}" \
             "&page=#{page}" \
             "&api_key=#{@api_key}"
+      url += "&two_year_transaction_period=#{cycle}" if cycle
 
       response = fetch_url(url)
       results = response["results"] || []
@@ -249,6 +254,7 @@ class FecApiClient
       break if page >= total_pages
 
       page += 1
+      sleep(REQUEST_PACING_SECONDS)
     end
 
     # Mark as complete
@@ -319,6 +325,7 @@ class FecApiClient
       break if page >= total_pages
 
       page += 1
+      sleep(REQUEST_PACING_SECONDS)
     end
 
     # Mark efile download as complete
@@ -414,6 +421,7 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--output-dir DIR", "Base output directory (committee ID subdir will be created)") { |v| options[:output_dir] = v }
     opts.on("-p", "--principal", "Mark this committee as the principal (main) committee") { options[:principal] = true }
     opts.on("--with-linked", "Auto-discover and download all linked committees found in Schedule B transfers") { options[:with_linked] = true }
+    opts.on("--cycle YYYY", Integer, "Scope download to a single 2-year cycle (fewer API calls; applies to linked committees too)") { |v| options[:cycle] = v }
     opts.on("--fec-dir DIR", "FEC directory to analyze (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
     opts.on("--list-files", "List all downloaded CSV files in --fec-dir") { options[:list_files] = true }
     opts.on("--list-linked", "Find linked committees in downloaded filings (requires --fec-dir)") { options[:list_linked] = true }
@@ -427,7 +435,7 @@ if $PROGRAM_NAME == __FILE__
 
   if options[:download]
     abort "fec-api-client.rb: --download requires --committee-id and --output-dir" unless options[:committee_id] && options[:output_dir]
-    client.download_committee_data(options[:committee_id], options[:output_dir], principal: options[:principal] || false, with_linked: options[:with_linked] || false)
+    client.download_committee_data(options[:committee_id], options[:output_dir], principal: options[:principal] || false, with_linked: options[:with_linked] || false, cycle: options[:cycle])
 
   elsif options[:fec_dir]
     if options[:list_linked]

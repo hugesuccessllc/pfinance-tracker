@@ -88,17 +88,21 @@ Manually export from https://www.fec.gov/data/:
 
 <img src="images/clear-button.png" width=200>
 
-* Take a screenshot of the cash summary, save it, and name it with a timestamp. This will serve as the overall timestamp for this collection. It's a silly way to record a timestamp but machines don't care.
-
-<pre>mv cash-summary.png `date +"%Y-%m-%d-%H-%M-%S-%Z"`-cash-summary.png</pre>
-
 * Move on to the next committee (some candidates have more than one, as seen below).
 
 <img src="images/several-committees.png" width=300>
 
-* Repeat all the above for each commitee, including the cash on hand and timestamp screenshot. Note each committee's ID and create a matching directory.
+* Repeat all the above for each committee. Note each committee's ID and create a matching directory.
 
-# Move on to the House Ethics Committee
+# Collect House Ethics Committee Data
+
+## Automated Way
+
+<img src="images/under-construction.gif" width=200>
+
+House Ethics Committee data automation is not yet implemented. Contributions welcome! For now, use the manual method below.
+
+## Manual Way
 
 * Create a directory, `house-ethics` for your candidate or member: `mkdir -p tx-11/august-pfluger/house-ethics`
 * Go to https://disclosures-clerk.house.gov/FinancialDisclosure

@@ -131,6 +131,25 @@
 #      buckets as the principal committee's itemized rows would conflate two different
 #      kinds of number (aggregate vs. line-item) and silently inflate "committee_totals".
 #
+#   7. Schedule A's "Transfers from authorized committees" line (excluded from donor
+#      totals by DONOR_LABELS, per gotcha 3 above) is NOT purely inter-committee pooled-
+#      proceeds transfers. On a principal committee that raises through a JFC, this same
+#      line also carries individual and PAC contributions that were earmarked through the
+#      JFC and are itemized here with the real underlying donor's name and (for PACs) FEC
+#      ID — e.g. August Pfluger's 2026 principal-committee data has $1.69M attributed
+#      directly to the JFC itself, but ALSO $737K across ~300 rows attributed to named
+#      PACs (Johnson & Johnson PAC, Home Depot PAC, Valero PAC, etc., each with a real
+#      contributor_id) and $1.4M across ~500 rows attributed to named individuals with a
+#      blank contributor_id — none of which show up in "Key Donors" because the line label
+#      excludes the whole bucket, JFC-pooled-transfer and earmarked-individual-money alike.
+#      Excluding all of it from donor totals is still the right call (this file's donor
+#      analysis is scoped to the principal committee's own direct receipts, not a JFC
+#      deep-dive), but a report that stops at "Key Donors: $570K" without mentioning this
+#      $3.8M sitting one line below it in the same file would materially understate how
+#      the candidate is actually funded. Surface the transfers-in total and its JFC/PAC/
+#      individual breakdown as context — this is available from the principal committee's
+#      own already-downloaded Schedule A, no separate committee download required.
+#
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
 # each participating committee (the candidate's own campaign, a party committee, allied
@@ -329,8 +348,6 @@ class FecAnalyzer
            i + 1, row[:name][0, 35], money(row[:total]), row[:employer][0, 30], row[:occupation][0, 20],
            row[:city], row[:state], committees_str)
   end
-
-  private
 
   def cycle_matches?(row, cycle)
     return true unless cycle
@@ -766,9 +783,11 @@ if $PROGRAM_NAME == __FILE__
   fec_data = fec.run
 
   house_ethics_data = nil
+  house_ethics_scanner = nil
   if options[:house_ethics_dir]
     abort "analyze-candidate.rb: no such directory #{options[:house_ethics_dir]}" unless Dir.exist?(options[:house_ethics_dir])
-    house_ethics_data = HouseEthicsScanner.new(options[:house_ethics_dir]).run
+    house_ethics_scanner = HouseEthicsScanner.new(options[:house_ethics_dir])
+    house_ethics_data = house_ethics_scanner.run
   end
 
   output =
@@ -789,7 +808,7 @@ if $PROGRAM_NAME == __FILE__
       out = fec.to_text(fec_data)
       if house_ethics_data
         out += "\n"
-        out += HouseEthicsScanner.new(options[:house_ethics_dir]).to_text(house_ethics_data)
+        out += house_ethics_scanner.to_text(house_ethics_data)
       end
       out
     end

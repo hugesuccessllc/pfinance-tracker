@@ -17,14 +17,28 @@ require "timeout"
 # via the OpenFEC API, saving as CSV files to disk.
 #
 # USAGE
-#   bundle exec ruby fec-api-client.rb --committee-id C00719294 --output-dir tx-11/august-pfluger/fec
-#   bundle exec ruby fec-api-client.rb --fec-dir tx-11/august-pfluger/fec --list-linked
+#   bundle exec ruby fec-api-client.rb --download --committee-id C00719294 --output-dir tx-11/august-pfluger/fec
+#   bundle exec ruby fec-api-client.rb --fec-dir tx-11/august-pfluger/fec
 
 class FecApiClient
   BASE_URL = "https://api.open.fec.gov/v1"
   SCHEDULES = ["schedule_a", "schedule_b"].freeze
   PAGE_SIZE = 100  # Max records per API request (0-100)
   REQUEST_PACING_SECONDS = 0.5  # Delay between successful requests to avoid tripping burst limits
+
+  # schedule_a and schedule_b responses embed full nested objects for any entity
+  # that's itself a committee: "committee" (the reporting committee's own
+  # metadata — name, address, treasurer, cycle history — identical on every row
+  # for a given file), schedule_b's "recipient_committee" (when the payee is a
+  # committee, e.g. an NRCC transfer), and schedule_a's "contributor" (when the
+  # donor is a committee, e.g. a PAC-to-PAC contribution). All three duplicate
+  # data already available as flat fields (committee_id, recipient_committee_id,
+  # contributor_name, etc.) that analyze-candidate.rb actually reads, and can
+  # inflate file size 4-5x for zero informational gain. Dropped from the header
+  # set before any row is written. If a future schedule type turns out to embed
+  # a similarly-shaped object under still another key, add it here rather than
+  # rediscovering the bloat by staring at file sizes again.
+  NESTED_METADATA_FIELDS = %w[committee recipient_committee contributor].freeze
 
   def initialize(api_key_file: ".fec_api_key")
     @api_key = load_api_key(api_key_file)
@@ -203,13 +217,6 @@ class FecApiClient
          "(#{detail["name"] || "name unknown"}) — no itemized data fetched"
   end
 
-  # Read CSV file
-  def read_csv_file(filepath)
-    File.read(filepath)
-  rescue StandardError => e
-    nil
-  end
-
   # Search repo for cached committee data. Prefers a cache whose manifest already
   # covers the requested cycle (or full history); falls back to any cache with data
   # if none is sufficient, letting the caller decide whether to use it.
@@ -347,24 +354,38 @@ class FecApiClient
     meta_filepath = "#{filepath}.meta"
 
     headers = nil
-    page = 1
+    page_count = 0
     total_pages = nil
     total_rows = 0
+    cursor = {}
 
+    # /schedules/schedule_a and schedule_b silently ignore a plain &page=N param
+    # once the result set is large enough — every "page" from 1 to N returns the
+    # IDENTICAL first 100 rows (confirmed empirically: a committee with 16,055
+    # schedule_a rows produced exactly 100 unique transaction_ids, each repeated
+    # 161 times — 100 x 161 = 16,100, matching the page count we were requesting).
+    # The API expects seek/cursor pagination instead: each response's
+    # pagination.last_indexes (e.g. {"last_index"=>"...", "last_contribution_receipt_date"=>"..."}
+    # for schedule_a; last_disbursement_date for schedule_b) must be echoed back
+    # as query params to get the NEXT page. Termination is by result-count
+    # (fewer than PAGE_SIZE rows back means this was the last page), not by
+    # comparing against pagination.pages — that field is still fetched for
+    # display purposes only.
     loop do
       url = "#{BASE_URL}/schedules/#{schedule}/" \
             "?committee_id=#{committee_id}" \
             "&per_page=#{PAGE_SIZE}" \
-            "&page=#{page}" \
             "&api_key=#{@api_key}"
       url += "&two_year_transaction_period=#{cycle}" if cycle
+      cursor.each { |k, v| url += "&#{k}=#{URI.encode_www_form_component(v.to_s)}" }
 
       response = fetch_url(url)
       results = response["results"] || []
+      page_count += 1
 
       # Extract headers from first response
       if headers.nil? && results.any?
-        headers = results.first.keys
+        headers = results.first.keys - NESTED_METADATA_FIELDS
         # Write header row on first page
         # NOTE: CSV.new(f) { |csv| ... } silently discards writes — the block form
         # doesn't behave like CSV.open. Must call csv << directly on the returned object.
@@ -388,12 +409,15 @@ class FecApiClient
       end
 
       # Write progress metadata
-      write_schedule_meta(meta_filepath, page, total_pages, total_rows, "in_progress")
-      puts "  Page #{page}/#{total_pages}... (#{results.length} rows, #{total_rows} total)"
+      write_schedule_meta(meta_filepath, page_count, total_pages, total_rows, "in_progress")
+      puts "  Page #{page_count}/#{total_pages}... (#{results.length} rows, #{total_rows} total)"
 
-      break if page >= total_pages
+      break if results.length < PAGE_SIZE
 
-      page += 1
+      next_cursor = response.dig("pagination", "last_indexes")
+      break if next_cursor.nil? || next_cursor.empty?
+
+      cursor = next_cursor
       sleep(REQUEST_PACING_SECONDS)
     end
 
@@ -457,7 +481,7 @@ class FecApiClient
 
           # Write efile progress metadata
           write_efile_meta(efile_meta_file, page, total_pages, efile_count, "in_progress")
-        rescue StandardError => e
+        rescue StandardError
           # Skip on error
         end
       end
@@ -510,7 +534,7 @@ class FecApiClient
     return nil if retry_count >= max_retries
     sleep(2 ** retry_count)
     download_external_csv(url, retry_count: retry_count + 1, max_retries: max_retries)
-  rescue StandardError => e
+  rescue StandardError
     nil
   end
 
@@ -584,7 +608,7 @@ if $PROGRAM_NAME == __FILE__
   options = {}
 
   OptionParser.new do |opts|
-    opts.banner = "Usage: fec-api-client.rb [--download | --list-files] [options]"
+    opts.banner = "Usage: fec-api-client.rb [--download | --fec-dir DIR] [options]"
     opts.on("--download", "Download committee data via OpenFEC API") { options[:download] = true }
     opts.on("--committee-id ID", "FEC committee ID (e.g., C00719294)") { |v| options[:committee_id] = v }
     opts.on("--output-dir DIR", "Base output directory (committee ID subdir will be created)") { |v| options[:output_dir] = v }
@@ -592,8 +616,7 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--with-affiliated", "Look up the principal's affiliated committee (JFC/leadership PAC, by name) and fetch its financial totals only — not itemized data") { options[:with_affiliated] = true }
     opts.on("--affiliated-committee-id ID", "Skip name search; fetch totals for this specific committee ID as the affiliated committee") { |v| options[:affiliated_committee_id] = v }
     opts.on("--cycle YYYY", Integer, "Scope download to a single 2-year cycle (fewer API calls; applies to the affiliated committee's totals too)") { |v| options[:cycle] = v }
-    opts.on("--fec-dir DIR", "FEC directory to inspect (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
-    opts.on("--list-files", "List all downloaded CSV files in --fec-dir") { options[:list_files] = true }
+    opts.on("--fec-dir DIR", "FEC directory to inspect — lists downloaded files (e.g., tx-11/august-pfluger/fec)") { |v| options[:fec_dir] = v }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -614,6 +637,6 @@ if $PROGRAM_NAME == __FILE__
     client.list_downloaded_files(options[:fec_dir])
 
   else
-    abort "fec-api-client.rb: provide --download, --list-files, or --list-linked (see --help)"
+    abort "fec-api-client.rb: provide --download or --fec-dir (see --help)"
   end
 end

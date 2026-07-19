@@ -84,9 +84,7 @@ ruby tooling/fec-api-client.rb \
   --principal --with-affiliated --cycle 2026
 
 # Step 2 (optional): Verify what's been downloaded
-ruby tooling/fec-api-client.rb \
-  --fec-dir tx-11/august-pfluger/fec \
-  --list-files
+ruby tooling/fec-api-client.rb --fec-dir tx-11/august-pfluger/fec
 ```
 
 **Flags:**
@@ -100,8 +98,7 @@ ruby tooling/fec-api-client.rb \
 | `--with-affiliated` | Look up the principal's `affiliated_committee_name` (a JFC or leadership PAC, self-reported on the committee's Form 1) and resolve it to a committee ID via FEC's committee name search, then fetch that committee's financial **totals only** — not itemized Schedule A/B. See "Affiliated committees" below for why. |
 | `--affiliated-committee-id ID` | Skip the name search; fetch totals for this specific committee ID as the affiliated committee (use when the name search is ambiguous, or you already know the ID) |
 | `--cycle YYYY` | Scope the download to a single 2-year cycle via the API's `two_year_transaction_period` filter (applies to the affiliated committee's totals too). Dramatically reduces API calls for committees with multi-cycle history — use this for current-cycle-only reports. |
-| `--fec-dir DIR` | Directory to inspect (with `--list-files`) |
-| `--list-files` | Show what CSVs have been downloaded |
+| `--fec-dir DIR` | Directory to inspect — lists what CSVs have been downloaded |
 | `--help` | Show all flags |
 
 **Affiliated committees: totals only, by design.**
@@ -151,7 +148,7 @@ rows_written: 20600
 status: in_progress
 ```
 
-If a download is interrupted by rate limiting, the partial CSV and its `.meta` file remain on disk (useful for inspection), but **re-running the command does not resume that file** — it starts a fresh timestamped CSV from page 1. To avoid burning quota on repeat full downloads:
+If a download is interrupted, the partial CSV and its `.meta` file remain on disk (useful for inspection), but **re-running the command does not resume that file** — it starts over from the beginning into a fresh timestamped CSV (schedule_a/schedule_b use cursor-based pagination internally, not page numbers, but a restart still means refetching from the first row). To avoid burning quota on repeat full downloads:
 1. Wait for API quota to reset (rolling 1-hour window), then re-run
 2. Use `--cycle YYYY` to scope to one cycle instead of full history — this is usually the real fix, since most quota exhaustion comes from paging through cycles you don't need for a current-cycle report
 
@@ -162,5 +159,5 @@ If a download is interrupted by rate limiting, the partial CSV and its `.meta` f
   - Structured schedules: `schedule_a-2026-07-19T14-30-05Z.csv`, `schedule_b-...csv` (parsed transactional data)
 - All files saved as uncompressed CSVs for direct file searching and grepping.
 - No manual FEC website clicking needed — fully automated API-based download.
-- API is rate-limited (HTTP 429): 1,000 calls/hour for a personal key (40/hour for `DEMO_KEY`; email apiinfo@fec.gov for a 7,200/hour upgraded key). The tool paces successive page requests (0.5s apart) to avoid tripping short-window burst limits, and retries 429s with exponential backoff (1s, 2s, 4s, 8s, 16s, up to 5 retries) as a fallback. Pacing and backoff both reduce *how often* you hit 429, but the real lever for large committees is `--cycle` — it cuts the number of pages fetched in the first place.
+- API is rate-limited (HTTP 429): 1,000 calls/hour for a personal key (40/hour for `DEMO_KEY`; email apiinfo@fec.gov for a 7,200/hour upgraded key). The tool paces successive page requests (0.5s apart) to avoid tripping short-window burst limits, and retries with exponential backoff (1s, 2s, 4s, 8s, 16s, up to 5 retries) on 429s, on transient 502/503/504 gateway errors, and on a request that hangs past a hard 90-second wall-clock timeout (a backstop added after observing a request stay wedged for 18+ minutes despite Net::HTTP's own configured timeouts never firing). Pacing and backoff both reduce *how often* you hit these, but the real lever for large committees is `--cycle` — it cuts the number of pages fetched in the first place.
 - Large committees may take a few minutes; typical committees (50-100k rows) download in 2-3 minutes. `--with-affiliated` adds only a few quick API calls (committee detail, name search, totals) regardless of how large the affiliated committee's own itemized history is, since no itemized data is fetched for it.

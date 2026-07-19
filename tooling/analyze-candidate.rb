@@ -65,6 +65,16 @@
 #        caught 35 more of Pfluger's own lump payments (worth ~$18.8k) that text-matching
 #        had missed, so this isn't just a Casar fix.
 #
+#        Some filers (John Carter's, TX-31, is the one that surfaced this) never populate
+#        back_reference_transaction_id at all — every memo_code=X row in the file has it
+#        blank, so the back-reference check finds zero parents/children even though the
+#        memo rows are full of real merchant names (e.g. hundreds of individual FACEBOOK,
+#        SOUTHWEST AIRLINE, H-E-B rows). analyze_card_breakdown therefore treats EVERY
+#        memo_code=X row in Schedule B as itemized vendor detail regardless of whether it
+#        has a resolvable back-reference, and only uses back-referenced rows to compute the
+#        parent_total/coverage_pct stats (which report as 0/n/a when no back-references
+#        exist — an honest "can't verify against a lump total," not a guess).
+#
 #   2. Negative amounts are corrections (chargebacks, reattributions, refunds), not noise
 #      — drop the row (`next if amount <= 0`) and you'll overstate whoever the correction
 #      applies to; net it into their running total instead. This script sums every
@@ -336,11 +346,18 @@ class FecAnalyzer
   # note 1 above. Reported separately from top_payees/by_category so the primary totals
   # stay correct (parent + children would double-count).
   #
-  # Parents are identified by the back-reference relationship itself (any non-memo row
-  # that a memo_code=X child points at via back_reference_transaction_id), NOT by matching
-  # disbursement_description text like "SEE MEMO ITEMS". That text varies by committee —
-  # e.g. Greg Casar's (TX-37) committees use "CREDIT CARD PAYMENT, SEE BELOW" for the same
-  # structure — so text-matching silently drops real lump payments for some candidates.
+  # Parents (where identifiable) are found by the back-reference relationship itself (any
+  # non-memo row that a memo_code=X child points at via back_reference_transaction_id), NOT
+  # by matching disbursement_description text like "SEE MEMO ITEMS". That text varies by
+  # committee — e.g. Greg Casar's (TX-37) committees use "CREDIT CARD PAYMENT, SEE BELOW"
+  # for the same structure — so text-matching silently drops real lump payments for some
+  # candidates.
+  #
+  # Every memo_code=X row is counted as itemized vendor detail regardless of whether it
+  # has a resolvable back-reference — some filers (John Carter's, TX-31) never populate
+  # back_reference_transaction_id at all, but the memo rows still carry real merchant
+  # names. When no back-referenced parents exist, parent_total/parent_count stay 0 and
+  # coverage_pct reports nil ("n/a") rather than guessing at a lump total to compare against.
   def analyze_card_breakdown
     vendor_totals = Hash.new(BigDecimal(0))
     vendor_meta = {}
@@ -352,17 +369,15 @@ class FecAnalyzer
 
     committees.each do |committee|
       rows = load_rows(committee, "schedule_b")
-      children = rows.select { |r| r["memo_code"] == "X" && !r["back_reference_transaction_id"].to_s.strip.empty? }
-      next if children.empty?
+      memo_rows = rows.select { |r| r["memo_code"] == "X" }
+      next if memo_rows.empty?
 
-      referenced_ids = children.map { |r| r["back_reference_transaction_id"] }.to_set
+      referenced_ids = memo_rows.map { |r| r["back_reference_transaction_id"] }
+                                 .reject { |v| v.to_s.strip.empty? }.to_set
       parents = rows.select { |r| r["memo_code"] != "X" && referenced_ids.include?(r["transaction_id"]) }
-      next if parents.empty?
-
-      parent_ids = parents.map { |r| r["transaction_id"] }
       parents.each { |r| parent_total += decimal(r["disbursement_amount"]); parent_count += 1 }
 
-      rows.select { |r| parent_ids.include?(r["back_reference_transaction_id"]) }.each do |row|
+      memo_rows.each do |row|
         amount = decimal(row["disbursement_amount"])
         child_total += amount
         child_count += 1

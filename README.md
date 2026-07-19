@@ -185,6 +185,8 @@ Use the output as your source data. The tool filters transactions to the specifi
 
 **Source:** FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory, filtered to the $CYCLE cycle."
 
+**END OF PROMPT**
+
 # We Must Go Deeper!
 
 The "Default current cycle summary generation" section above produces a fixed, one-cycle executive summary — a high-level snapshot of the current filing period's top donors, spending, and takeaways. But a candidate's financial story often spans multiple cycles, and worth investigating are focused cuts: all corporate/PAC donations across their career, individual donors giving above a threshold in each cycle, or how spending priorities have shifted over time.

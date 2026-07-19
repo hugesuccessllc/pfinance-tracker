@@ -21,7 +21,7 @@ By submitting a contribution, you grant Huge Success, LLC. a perpetual, worldwid
 
 # Process
 
-This repo has two distinct phases, and they never overlap: **Step 1: Collect** your data, then **Step 2: Analyze** it. Collection means running `fec-api-client.rb` (or the manual FEC-website steps) yourself, as an explicit action, to populate a candidate's `fec/` and `house-ethics/` directories on disk. Analysis means handing one of the reusable prompts below to an LLM session and pointing it at those directories.
+This repo has two distinct phases, and they never overlap: **Step 1: Collect** your data, then **Step 2: Analyze** it. Collection means manually exporting from the FEC website (recommended for now) or running `fec-api-client.rb` (experimental — see below) yourself, as an explicit action, to populate a candidate's `fec/` and `house-ethics/` directories on disk. Analysis means handing one of the reusable prompts below to an LLM session and pointing it at those directories.
 
 **The analysis prompts never download anything.** They assume the data they need is already sitting in `$CANDIDATE_DIR/fec/` and `$CANDIDATE_DIR/house-ethics/` before they start. If it isn't there, the correct behavior is to stop and say so — not to reach for `fec-api-client.rb --download` mid-analysis. This matters because collection is a judgment call (which committees, how much history, whether to itemize or just get totals) that belongs to a human — or an LLM explicitly asked to do it as its own separate task — not something that should happen as a side effect of "just write me a summary." Keeping the two steps apart is also what makes the iterative workflow below possible: run a fast, principal-committee-only pass, read what it suggests investigating further, then go collect *those* committees yourself before re-running analysis with the fuller picture.
 
@@ -29,14 +29,55 @@ This repo has two distinct phases, and they never overlap: **Step 1: Collect** y
 
 ### Collect FEC Data
 
-FEC data comes in two forms: raw efile dumps and structured transaction schedules. You can collect it manually via the FEC web UI or automatically via the OpenFEC API.
+FEC data comes in two forms: raw efile dumps and structured transaction schedules. You can collect it manually via the FEC web UI or automatically via the OpenFEC API. **Start with the manual way** — see below for why.
 
-#### Automated Way (Recommended)
+#### Manual Way (Recommended, for now)
 
-Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download committee data automatically. This gets you:
+Manually export from https://www.fec.gov/data/, starting with just the principal committee — a hand-picked, deliberately small set of committees, not "every committee this candidate has ever touched." You can always come back and export more once you (or a Step 2 analysis pass) have a reason to:
+
+* Make a directory to store FEC things. For example, for August Pfluger, running in TX-11, it would be:
+
+`mkdir -p tx-11/august-pfluger/fec/`
+
+* Go to https://www.fec.gov/data/
+* Seach your candidate's name, and notice active committees, like so:
+
+<img src="images/fec-search.png" width=300>
+
+* Note the committee number for the **principal campaign committee** (in this case, `C00719294`), and make a directory for it: `mkdir -p tx-11/august-pfluger/fec/C00719294`
+
+* Visit the committee page, eg `https://www.fec.gov/data/committee/C00719294/`, and click "Browse Reciepts", once you've checked you're looking at the right year.
+
+<img src="images/committee-page-receipts.png" width=600>
+
+* Click Export, and wait a moment. By default, you're exporting the processed data. Save it to the directory you just made.
+
+* Flip over to Raw data, and do it again. What's the precise difference between "processed" and "raw?" Got me, may as well grab them both, more data is always better, right?
+
+<img src="images/raw-data-export.png" width=600>
+
+* With your browser's back button, go back, and then select "Browse Disbursements," the next section after Receipts.
+
+<img src="images/browse-disbursements.png" width=600>
+
+* Export in the same way; processed, then raw, and save those. You'll want to routinely clear the "Your Downloads" tab because they'll get confusing after about three:
+
+<img src="images/clear-button.png" width=200>
+
+* **Stop there for a first pass.** A candidate may have several committees (as seen below) — a JFC, a leadership PAC, prior-cycle committee IDs — but don't go collect all of them reflexively.
+
+<img src="images/several-committees.png" width=300>
+
+* Once Step 2's analysis names a specific other committee worth investigating (see "Suggested Committees for Further Investigation" in its output), come back and repeat the steps above for just that committee, noting its ID and making a matching directory.
+
+#### Automated Way (Experimental)
+
+Use [`/tooling/fec-api-client.rb`](tooling/fec-api-client.rb) to download committee data automatically instead. This gets you:
 - Raw efile CSVs (comprehensive line-item filings)
 - Schedule A (receipts/contributions)
 - Schedule B (disbursements)
+
+**Treat this tool as experimental, not a trusted default.** In the course of a single session building it, it turned out to have: a pagination bug that silently re-fetched and duplicated the same 100 rows over and over (one committee's "16,100 rows" were actually just 100 unique transactions repeated 161 times each, which briefly made a $2,500 PAC contribution look like a $402,500 one); a bloat bug that quintupled file sizes with duplicate embedded metadata; and a request-hang bug where a single stuck socket could block an entire download indefinitely. All three are fixed and the fixes were verified against the live API, but three non-trivial correctness bugs surfacing in one sitting is reason enough to not lean on this tool without double-checking its output (e.g. confirm unique `transaction_id` count matches row count) until it's earned more confidence over time.
 
 **Setup:** Get a free API key at https://api.data.gov/ (takes 30 seconds), then:
 
@@ -59,45 +100,6 @@ The `--principal` flag marks the principal committee with a `PRINCIPAL` marker f
 **Rate limits:** The standard API key allows 1,000 calls/hour. Downloads are paced automatically to avoid tripping burst limits and retry on HTTP 429 (and on transient 502/503/504 gateway errors), but if you exhaust the hourly quota entirely, wait for it to reset (or email apiinfo@fec.gov for a 7,200/hour upgraded key). Interrupted downloads leave partial CSVs on disk (tracked via `.meta` files) but re-running starts a fresh file rather than resuming — use `--cycle` to keep downloads small enough to complete in one pass.
 
 For full documentation and flags, see [tooling/README.md](tooling/README.md).
-
-#### Manual Way
-
-Manually export from https://www.fec.gov/data/:
-
-* Make a directory to store FEC things. For example, for August Pfluger, running in TX-11, it would be:
-
-`mkdir -p tx-11/august-pfluger/fec/`
-
-* Go to https://www.fec.gov/data/
-* Seach your candidate's name, and notice active committees, like so:
-
-<img src="images/fec-search.png" width=300>
-
-* Note the committee number you're interested in (in this case, `C00719294`), and make a directory for it: `mkdir -p tx-11/august-pfluger/fec/C00719294`
-
-* Visit the committee page, eg `https://www.fec.gov/data/committee/C00719294/`, and click "Browse Reciepts", once you've checked you're looking at the right year.
-
-<img src="images/committee-page-receipts.png" width=600>
-
-* Click Export, and wait a moment. By default, you're exporting the processed data. Save it to the directory you just made.
-
-* Flip over to Raw data, and do it again. What's the precise difference between "processed" and "raw?" Got me, may as well grab them both, more data is always better, right?
-
-<img src="images/raw-data-export.png" width=600>
-
-* With your browser's back button, go back, and then select "Browse Disbursements," the next section after Receipts.
-
-<img src="images/browse-disbursements.png" width=600>
-
-* Export in the same way; processed, then raw, and save those. You'll want to routinely clear the "Your Downloads" tab because they'll get confusing after about three:
-
-<img src="images/clear-button.png" width=200>
-
-* Move on to the next committee (some candidates have more than one, as seen below).
-
-<img src="images/several-committees.png" width=300>
-
-* Repeat all the above for each committee. Note each committee's ID and create a matching directory.
 
 ### Collect House Ethics Committee Data
 

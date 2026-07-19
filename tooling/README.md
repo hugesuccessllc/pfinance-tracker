@@ -59,6 +59,8 @@ ruby tooling/analyze-candidate.rb \
 
 ## fec-api-client.rb
 
+**Status: experimental.** A single working session on this tool turned up three non-trivial correctness bugs: silent pagination duplication (re-fetched the same 100 rows repeatedly instead of paging, which inflated a real $2,500 contribution into an apparent $402,500 one), ~5x file bloat from duplicated embedded metadata, and a request that could hang indefinitely despite configured timeouts. All three are fixed and verified against the live API, but that track record means this tool hasn't yet earned default trust — see the main [README.md](../README.md) for why manual export is the current recommended starting point. If you do use this tool, spot-check its output (e.g. confirm unique `transaction_id` count matches row count) before trusting any total downstream.
+
 **Purpose:** Automatically downloads raw efile data plus Schedule A (receipts) and Schedule B (disbursements) data from the FEC via the OpenFEC API for a committee, plus (optionally) financial totals for that committee's affiliated JFC/leadership PAC.
 
 **Setup:**

@@ -23,12 +23,12 @@ The below details the process of collecting data.
 
 ## The FEC
 
-* Make a directory to store FEC things:
+* Make a directory to store FEC things. For example, for August Pfluger, running in TX-11, it would be:
 
 `mkdir -p tx-11/august-pfluger/fec/`
 
 * Go to https://www.fec.gov/data/
-* Seach your candidate, and notice active committees, like so:
+* Seach your candidate's name, and notice active committees, like so:
 
 <img src="fec-search.png" width=300>
 

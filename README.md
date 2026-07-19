@@ -1,6 +1,8 @@
 # Pfinance Tracker
 
-This is todb's Pfinance Tracker, useful for tracking the financial disclosures for candidates for the US House of Representatives. Currently, it relies on two major data soruces:
+This is todb's Pfinance Tracker, useful for tracking the financial disclosures for candidates for the US House of Representatives. It's a toy for now, mostly to teach myself how robust prompt engineering works. The findings shouldn't be believed without rigorous fact-checking.
+
+Currently, it relies on two major data soruces:
 
 * The FEC
 * THe US House Ethics Committee

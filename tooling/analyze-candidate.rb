@@ -45,15 +45,25 @@
 #        individual donor row). Excluding it is correct and loses no information.
 #      - Schedule B: the memo rows are very often the ONLY place the real vendor-level
 #        detail lives. A committee reports one lump non-memo payment to a card processor
-#        ("AMERICAN EXPRESS", disbursement_description "SEE MEMO ITEMS") and then dozens
-#        to hundreds of memo_code=X child rows — each with a real recipient_name (an
-#        airline, a hotel, a caterer) and back_reference_transaction_id pointing at that
-#        parent — giving the actual itemized purchases. Excluding memo rows keeps the
-#        DOLLAR TOTAL correct (summing parent + children would double it), but throwing
-#        the children away entirely erases the only merchant-level detail that exists for
-#        that spending. Don't call this kind of lump payment a "black box" without first
-#        checking for back-referenced children — see analyze_card_breakdown below, which
-#        surfaces them separately so the total stays accurate AND the detail isn't lost.
+#        (e.g. "AMERICAN EXPRESS") and then dozens to hundreds of memo_code=X child rows —
+#        each with a real recipient_name (an airline, a hotel, a caterer) and
+#        back_reference_transaction_id pointing at that parent — giving the actual itemized
+#        purchases. Excluding memo rows keeps the DOLLAR TOTAL correct (summing parent +
+#        children would double it), but throwing the children away entirely erases the only
+#        merchant-level detail that exists for that spending. Don't call this kind of lump
+#        payment a "black box" without first checking for back-referenced children — see
+#        analyze_card_breakdown below, which surfaces them separately so the total stays
+#        accurate AND the detail isn't lost.
+#
+#        IMPORTANT: identify the parent row by the back-reference relationship itself
+#        (a non-memo row whose transaction_id some memo_code=X row's
+#        back_reference_transaction_id points at) — NOT by matching disbursement_description
+#        text like "SEE MEMO ITEMS". That text is committee-specific: August Pfluger's
+#        (TX-11) committees mostly use it, but Greg Casar's (TX-37) use "CREDIT CARD
+#        PAYMENT, SEE BELOW" for the identical structure. Text-matching silently drops real
+#        lump payments for committees that phrase it differently — the back-reference check
+#        caught 35 more of Pfluger's own lump payments (worth ~$18.8k) that text-matching
+#        had missed, so this isn't just a Casar fix.
 #
 #   2. Negative amounts are corrections (chargebacks, reattributions, refunds), not noise
 #      — drop the row (`next if amount <= 0`) and you'll overstate whoever the correction
@@ -103,6 +113,7 @@ require "bigdecimal"
 require "json"
 require "optparse"
 require "stringio"
+require "set"
 require "pdf-reader"
 
 # ---------------------------------------------------------------------------
@@ -321,9 +332,15 @@ class FecAnalyzer
   end
 
   # Surfaces the real vendor-level detail hiding inside lump/bulk payments (typically
-  # credit-card processors) whose disbursement_description says "SEE MEMO ITEM(S)" — see
-  # strategy note 1 above. Reported separately from top_payees/by_category so the primary
-  # totals stay correct (parent + children would double-count).
+  # credit-card processors) whose memo_code=X children back-reference them — see strategy
+  # note 1 above. Reported separately from top_payees/by_category so the primary totals
+  # stay correct (parent + children would double-count).
+  #
+  # Parents are identified by the back-reference relationship itself (any non-memo row
+  # that a memo_code=X child points at via back_reference_transaction_id), NOT by matching
+  # disbursement_description text like "SEE MEMO ITEMS". That text varies by committee —
+  # e.g. Greg Casar's (TX-37) committees use "CREDIT CARD PAYMENT, SEE BELOW" for the same
+  # structure — so text-matching silently drops real lump payments for some candidates.
   def analyze_card_breakdown
     vendor_totals = Hash.new(BigDecimal(0))
     vendor_meta = {}
@@ -335,7 +352,11 @@ class FecAnalyzer
 
     committees.each do |committee|
       rows = load_rows(committee, "schedule_b")
-      parents = rows.select { |r| r["memo_code"] != "X" && r["disbursement_description"].to_s.match?(/SEE MEMO ITEMS?/i) }
+      children = rows.select { |r| r["memo_code"] == "X" && !r["back_reference_transaction_id"].to_s.strip.empty? }
+      next if children.empty?
+
+      referenced_ids = children.map { |r| r["back_reference_transaction_id"] }.to_set
+      parents = rows.select { |r| r["memo_code"] != "X" && referenced_ids.include?(r["transaction_id"]) }
       next if parents.empty?
 
       parent_ids = parents.map { |r| r["transaction_id"] }

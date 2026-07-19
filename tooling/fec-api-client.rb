@@ -8,6 +8,8 @@ require "uri"
 require "fileutils"
 require "csv"
 require "zlib"
+require "time"
+require "timeout"
 
 # FEC API client — automated committee filing downloader.
 #
@@ -48,7 +50,7 @@ class FecApiClient
     else
       # Check for cached data elsewhere in repo — only use it if its manifest actually
       # covers what we need; otherwise fall through to a fresh local download.
-      cached_dir = find_cached_committee(committee_id, cycle: cycle)
+      cached_dir = find_cached_committee(committee_id, cycle: cycle, exclude_dir: committee_dir)
       cached_manifest = cached_dir ? read_cycles_manifest(cached_dir) : nil
 
       if cached_dir && manifest_covers?(cached_manifest, cycle)
@@ -163,12 +165,15 @@ class FecApiClient
   # Search repo for cached committee data. Prefers a cache whose manifest already
   # covers the requested cycle (or full history); falls back to any cache with data
   # if none is sufficient, letting the caller decide whether to use it.
-  def find_cached_committee(committee_id, cycle: nil)
+  def find_cached_committee(committee_id, cycle: nil, exclude_dir: nil)
     git_root = `git rev-parse --show-toplevel 2>/dev/null`.strip
     return nil if git_root.empty?
 
+    exclude_real = (exclude_dir && Dir.exist?(exclude_dir)) ? File.realpath(exclude_dir) : nil
+
     candidates = Dir.glob(File.join(git_root, "**/fec/#{committee_id}")).select do |dir|
       File.directory?(dir) &&
+        (exclude_real.nil? || File.realpath(dir) != exclude_real) &&
         (Dir.glob(File.join(dir, "schedule_*.csv")).any? || Dir.glob(File.join(dir, "efile-*.csv")).any?)
     end
 
@@ -313,10 +318,11 @@ class FecApiClient
       if headers.nil? && results.any?
         headers = results.first.keys
         # Write header row on first page
+        # NOTE: CSV.new(f) { |csv| ... } silently discards writes — the block form
+        # doesn't behave like CSV.open. Must call csv << directly on the returned object.
         File.open(filepath, "w") do |f|
-          CSV.new(f) do |csv|
-            csv << headers
-          end
+          csv = CSV.new(f)
+          csv << headers
         end
       end
 
@@ -438,9 +444,9 @@ class FecApiClient
     http.read_timeout = 60
 
     request = Net::HTTP::Get.new(uri.request_uri)
-    response = http.request(request)
+    response = Timeout.timeout(90) { http.request(request) }
 
-    if response.code == "429"
+    if response.code == "429" || %w[502 503 504].include?(response.code)
       if retry_count >= max_retries
         return nil
       end
@@ -452,6 +458,10 @@ class FecApiClient
     return nil unless response.code == "200"
 
     response.body
+  rescue Timeout::Error
+    return nil if retry_count >= max_retries
+    sleep(2 ** retry_count)
+    download_external_csv(url, retry_count: retry_count + 1, max_retries: max_retries)
   rescue StandardError => e
     nil
   end
@@ -474,7 +484,11 @@ class FecApiClient
 
     request = Net::HTTP::Get.new(uri.request_uri)
     request["Accept-Encoding"] = "gzip"
-    response = http.request(request)
+    # Net::HTTP's open_timeout/read_timeout don't reliably bound every hang (observed:
+    # a request stuck for 18+ minutes with neither timeout firing, while a plain curl
+    # to the same URL returned in under a second) — wrap in a hard wall-clock timeout
+    # as a backstop so one wedged socket can't block an entire download run.
+    response = Timeout.timeout(90) { http.request(request) }
 
     if response.code == "429"
       if retry_count >= max_retries
@@ -486,11 +500,32 @@ class FecApiClient
       return fetch_url(url, retry_count: retry_count + 1, max_retries: max_retries)
     end
 
+    # 502/503/504 are transient gateway/server errors from the FEC API under load,
+    # not rate limiting — worth the same exponential backoff rather than aborting
+    # and losing all download progress on a single hiccup.
+    if %w[502 503 504].include?(response.code)
+      if retry_count >= max_retries
+        abort "fec-api-client.rb: HTTP #{response.code} after #{max_retries} retries."
+      end
+      wait_seconds = 2 ** retry_count
+      puts "⚠ Transient server error (HTTP #{response.code}). Waiting #{wait_seconds}s before retry #{retry_count + 1}/#{max_retries}..."
+      sleep(wait_seconds)
+      return fetch_url(url, retry_count: retry_count + 1, max_retries: max_retries)
+    end
+
     abort "fec-api-client.rb: HTTP #{response.code}" unless response.code == "200"
 
     body = response.body
     body = Zlib::GzipReader.new(StringIO.new(body)).read if response["content-encoding"] == "gzip"
     JSON.parse(body)
+  rescue Timeout::Error
+    if retry_count >= max_retries
+      abort "fec-api-client.rb: Request hung past #{90}s timeout after #{max_retries} retries."
+    end
+    wait_seconds = 2 ** retry_count
+    puts "⚠ Request hung past timeout. Waiting #{wait_seconds}s before retry #{retry_count + 1}/#{max_retries}..."
+    sleep(wait_seconds)
+    fetch_url(url, retry_count: retry_count + 1, max_retries: max_retries)
   rescue StandardError => e
     abort "fec-api-client.rb: Error fetching URL: #{e.message}"
   end

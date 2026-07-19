@@ -99,6 +99,27 @@
 #      giving the committee money. DONOR_LABELS below encodes that allowlist. If a future
 #      FEC export uses different label text, this is the constant to update.
 #
+#   4. Multi-cycle data in the same fec/<committee-id>/ directory — Schedule A and B rows
+#      each carry a `two_year_transaction_period` field (e.g. "2026", "2024") that self-
+#      identifies the FEC 2-year cycle that row belongs to. To build full-career deep dives,
+#      re-run the FEC export UI for each earlier cycle you want to include and drop the
+#      resulting schedule_a-*.csv/schedule_b-*.csv files into the same committee directory.
+#      The tool's --cycle and --by-cycle flags use two_year_transaction_period to filter or
+#      group reports by cycle. Also: candidates may have prior, now-terminated committee IDs
+#      from earlier in their career (discoverable via the FEC committee page's "Affiliated/
+#      Related committees" link) — give each its own fec/<old-committee-id>/ directory,
+#      exactly like an active committee. IMPORTANT: this script's directory-discovery regex
+#      is /\AC\d{6,}\z/ (committee ID, C-prefix) — if you accidentally name a directory for
+#      the candidate ID (H-prefix) instead, the tool finds zero committees and reports all
+#      zeros with no warning (see project memory for documentation of this footgun).
+#
+#   5. The `two_year_transaction_period` and `fec_election_year` fields on each row are
+#      expected to agree (typically both "2026" for a 2024-2026 cycle), but aren't
+#      guaranteed to by the FEC spec. The cycle_integrity_check method counts rows where
+#      these two fields disagree and surfaces them as a warning, rather than silently
+#      assuming agreement. This matches the script's existing posture toward spots where
+#      the FEC data could be ambiguous or inconsistent: count first, ask questions later.
+#
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
 # each participating committee (the candidate's own campaign, a party committee, allied
@@ -138,9 +159,13 @@ class FecAnalyzer
 
   Committee = Struct.new(:id, :name, :dir)
 
-  def initialize(fec_dir, top: 15)
+  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil)
     @fec_dir = fec_dir
     @top = top
+    @cycle = cycle
+    @by_cycle = by_cycle
+    @min_amount = min_amount && BigDecimal(min_amount.to_s)
+    @donor_type = donor_type
   end
 
   def committees
@@ -151,17 +176,65 @@ class FecAnalyzer
   end
 
   def run
-    donors = analyze_donors
-    disbursements = analyze_disbursements
-    {
-      committees: committees.map { |c| { id: c.id, name: c.name } },
-      donors: donors,
-      disbursements: disbursements
-    }
+    if @by_cycle || @cycle
+      result = { committees: committees.map { |c| { id: c.id, name: c.name } },
+                 cycle_integrity: cycle_integrity_check }
+      if @by_cycle
+        result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
+          h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
+        end
+      else
+        result[:cycle] = @cycle.to_s
+        result[:donors] = analyze_donors(cycle: @cycle)
+        result[:disbursements] = analyze_disbursements(cycle: @cycle)
+      end
+      result
+    else
+      {
+        committees: committees.map { |c| { id: c.id, name: c.name } },
+        donors: analyze_donors,
+        disbursements: analyze_disbursements
+      }
+    end
   end
 
   def to_text(data)
     io = StringIO.new
+
+    if data[:cycle_integrity] && data[:cycle_integrity][:mismatch_count] > 0
+      io.puts "!! CYCLE INTEGRITY WARNING: #{data[:cycle_integrity][:mismatch_count]} row(s) where " \
+              "two_year_transaction_period != fec_election_year — spot-check before trusting --cycle/--by-cycle grouping:"
+      data[:cycle_integrity][:examples].each do |m|
+        io.puts "  committee=#{m[:committee]} transaction_id=#{m[:transaction_id]} " \
+                "two_year_transaction_period=#{m[:two_year_transaction_period]} fec_election_year=#{m[:fec_election_year]}"
+      end
+      io.puts
+    end
+
+    if data[:cycle]
+      io.puts "Report scoped to FEC 2-year cycle: #{data[:cycle]}"
+      io.puts
+    end
+
+    if data[:by_cycle]
+      data[:by_cycle].each do |cyc, section|
+        io.puts "#" * 80
+        io.puts "CYCLE #{cyc}"
+        io.puts "#" * 80
+        io.puts
+        render_flat_report(io, section)
+        io.puts
+      end
+    else
+      render_flat_report(io, data)
+    end
+
+    io.string
+  end
+
+  private
+
+  def render_flat_report(io, data)
     print_committee_totals(io, "RECEIPTS (itemized, non-memo, donor rows only)", data[:donors][:committee_totals])
     io.puts
     io.puts "Individual vs. Committee/PAC receipts:"
@@ -169,12 +242,16 @@ class FecAnalyzer
     io.puts
 
     print_table(io, "TOP DONORS (deduped by name+employer, across all committees)", data[:donors][:top]) do |row, i|
-      committees_str = row[:by_committee].map { |cid, amt| "#{cid}: #{money(amt)}" }.join(", ")
-      format("%2d. %-35s %12s  | employer: %-30s occ: %-20s %s, %s | %s",
-             i + 1, row[:name][0, 35], money(row[:total]), row[:employer][0, 30], row[:occupation][0, 20],
-             row[:city], row[:state], committees_str)
+      donor_row_line(row, i)
     end
     io.puts
+
+    if data[:donors][:over_threshold]
+      print_table(io, "DONORS AT OR ABOVE THRESHOLD (aggregate, all committees combined)", data[:donors][:over_threshold]) do |row, i|
+        donor_row_line(row, i)
+      end
+      io.puts
+    end
 
     print_committee_totals(io, "DISBURSEMENTS (itemized, non-memo)", data[:disbursements][:committee_totals])
     io.puts
@@ -211,11 +288,51 @@ class FecAnalyzer
     cb[:by_category].each_with_index do |row, i|
       io.puts format("%2d. %-45s %12s", i + 1, row[:category][0, 45], money(row[:total]))
     end
+  end
 
-    io.string
+  def donor_row_line(row, i)
+    committees_str = row[:by_committee].map { |cid, amt| "#{cid}: #{money(amt)}" }.join(", ")
+    format("%2d. %-35s %12s  | employer: %-30s occ: %-20s %s, %s | %s",
+           i + 1, row[:name][0, 35], money(row[:total]), row[:employer][0, 30], row[:occupation][0, 20],
+           row[:city], row[:state], committees_str)
   end
 
   private
+
+  def cycle_matches?(row, cycle)
+    return true unless cycle
+    row["two_year_transaction_period"].to_s.strip == cycle.to_s
+  end
+
+  def donor_type_matches?(row, donor_type)
+    return true unless donor_type
+    is_individual = row["is_individual"] == "t"
+    donor_type == "individual" ? is_individual : !is_individual
+  end
+
+  def discovered_cycles
+    return [@cycle.to_s] if @cycle
+    cycles = Set.new
+    committees.each do |c|
+      load_rows(c, "schedule_a").each { |r| cycles << r["two_year_transaction_period"].to_s.strip }
+      load_rows(c, "schedule_b").each { |r| cycles << r["two_year_transaction_period"].to_s.strip }
+    end
+    cycles.reject(&:empty?).sort.reverse
+  end
+
+  def cycle_integrity_check
+    mismatches = []
+    committees.each do |c|
+      (load_rows(c, "schedule_a") + load_rows(c, "schedule_b")).each do |row|
+        cyc = row["two_year_transaction_period"].to_s.strip
+        fey = row["fec_election_year"].to_s.strip
+        next if fey.empty? || fey == cyc
+        mismatches << { committee: c.id, transaction_id: row["transaction_id"],
+                        two_year_transaction_period: cyc, fec_election_year: fey }
+      end
+    end
+    { mismatch_count: mismatches.size, examples: mismatches.first(5) }
+  end
 
   def committee_name_for(id)
     %w[schedule_a schedule_b efile].each do |schedule|
@@ -242,7 +359,7 @@ class FecAnalyzer
     format("$%.2f", bd)
   end
 
-  def analyze_donors
+  def analyze_donors(cycle: @cycle, donor_type: @donor_type, min_amount: @min_amount)
     totals = Hash.new(BigDecimal(0))
     meta = {}
     committee_totals = Hash.new(BigDecimal(0))
@@ -252,6 +369,8 @@ class FecAnalyzer
       load_rows(committee, "schedule_a").each do |row|
         next if row["memo_code"] == "X"
         next unless DONOR_LABELS.include?(row["line_number_label"].to_s.strip)
+        next unless cycle_matches?(row, cycle)
+        next unless donor_type_matches?(row, donor_type)
 
         # Sum every in-scope row, positive or negative — chargebacks/reattributions net
         # against the donor's other gifts rather than being silently discarded.
@@ -277,16 +396,25 @@ class FecAnalyzer
       end
     end
 
-    top = totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
+    qualifying = totals.select { |_k, v| v > 0 }
+    top = qualifying.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
 
-    {
+    result = {
       committee_totals: committee_totals,
       individual_vs_committee: individual_vs_committee,
       top: top
     }
+
+    if min_amount
+      result[:over_threshold] = qualifying.select { |_k, v| v >= min_amount }
+                                           .sort_by { |_k, v| -v }
+                                           .map { |key, total| meta[key].merge(total: total) }
+    end
+
+    result
   end
 
-  def analyze_disbursements
+  def analyze_disbursements(cycle: @cycle)
     category_totals = Hash.new(BigDecimal(0))
     category_counts = Hash.new(0)
     payee_totals = Hash.new(BigDecimal(0))
@@ -297,6 +425,7 @@ class FecAnalyzer
     committees.each do |committee|
       load_rows(committee, "schedule_b").each do |row|
         next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
 
         # Sum every non-memo row, positive or negative — vendor credits/refunds net
         # against that vendor's other charges rather than being silently discarded.
@@ -337,7 +466,7 @@ class FecAnalyzer
       by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total, count: category_counts[cat] } },
       top_payees: payee_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| payee_meta[payee].merge(payee: payee, total: total) },
       top_single: all_disbursements.sort_by { |r| -r[:amount] }.first(@top),
-      card_breakdown: analyze_card_breakdown
+      card_breakdown: analyze_card_breakdown(cycle: cycle)
     }
   end
 
@@ -358,7 +487,7 @@ class FecAnalyzer
   # back_reference_transaction_id at all, but the memo rows still carry real merchant
   # names. When no back-referenced parents exist, parent_total/parent_count stay 0 and
   # coverage_pct reports nil ("n/a") rather than guessing at a lump total to compare against.
-  def analyze_card_breakdown
+  def analyze_card_breakdown(cycle: @cycle)
     vendor_totals = Hash.new(BigDecimal(0))
     vendor_meta = {}
     category_totals = Hash.new(BigDecimal(0))
@@ -368,7 +497,7 @@ class FecAnalyzer
     child_count = 0
 
     committees.each do |committee|
-      rows = load_rows(committee, "schedule_b")
+      rows = load_rows(committee, "schedule_b").select { |r| cycle_matches?(r, cycle) }
       memo_rows = rows.select { |r| r["memo_code"] == "X" }
       next if memo_rows.empty?
 
@@ -482,6 +611,10 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--top N", Integer, "Rows per top-N table (default 15)") { |v| options[:top] = v }
     opts.on("--format FORMAT", %w[text json], "Output format: text (default) or json") { |v| options[:format] = v }
     opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
+    opts.on("--cycle YYYY", Integer, "Scope the whole report to a single 2-year FEC cycle (two_year_transaction_period), e.g. --cycle 2026. Applies to both donors and disbursements. Default: combined across all cycles present.") { |v| options[:cycle] = v }
+    opts.on("--by-cycle", "Group donor/disbursement tables into one section per 2-year cycle instead of one combined total. Intended for multi-cycle/full-history data collected into the same fec/<committee-id>/ directories.") { options[:by_cycle] = true }
+    opts.on("--min-amount N", Float, "In addition to the normal --top table, report ALL donors (subject to any active --cycle/--donor-type filter) whose aggregate contribution total is >= N. E.g. --min-amount 50000.") { |v| options[:min_amount] = v }
+    opts.on("--donor-type TYPE", %w[individual committee], "Restrict donor analysis to individual donors or committee/PAC donors (is_individual field). No structured 'corporate' field exists in this data — see README.") { |v| options[:donor_type] = v }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -491,7 +624,9 @@ if $PROGRAM_NAME == __FILE__
   abort "analyze-candidate.rb: --fec-dir is required (see --help)" unless options[:fec_dir]
   abort "analyze-candidate.rb: no such directory #{options[:fec_dir]}" unless Dir.exist?(options[:fec_dir])
 
-  fec = FecAnalyzer.new(options[:fec_dir], top: options[:top])
+  fec = FecAnalyzer.new(options[:fec_dir], top: options[:top], cycle: options[:cycle],
+                         by_cycle: options[:by_cycle], min_amount: options[:min_amount],
+                         donor_type: options[:donor_type])
   fec_data = fec.run
 
   house_ethics_data = nil

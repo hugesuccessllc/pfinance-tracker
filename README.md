@@ -91,9 +91,9 @@ The smart way to analyze this stuff is to go through these things would be to le
 
 I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [Claude Code for Visual Studio](https://marketplace.visualstudio.com/items?itemName=dliedke.ClaudeCodeExtension) extension, along with a $20/month subscription and a working knowledge of Ruby (my R and Python knowledge is much thinner). Let's go to town.
 
-## Summary generation
+## Default current cycle summary generation
 
-This prompt is a reusable template — copy everything from the variable block down to the closing quote, fill in `$CANDIDATE` and `$DISTRICT`, and hand it to a fresh LLM session.
+This prompt is a reusable template for the standard one-cycle executive summary — copy everything from the variable block down to the closing quote, fill in `$CANDIDATE` and `$DISTRICT`, and hand it to a fresh LLM session. (For multi-cycle or focused deep-dive analyses, see "We Must Go Deeper!" below.)
 
 ```
 CANDIDATE: `Candidate Name`
@@ -127,3 +127,97 @@ Every `$CANDIDATE` / `$DISTRICT` below is that same substitution. `$CANDIDATE_DI
 **Tone:** Analytical, conversational for a general political audience. Avoid jargon; explain significance where needed.
 
 **Source:** All data from FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory."
+
+# We Must Go Deeper!
+
+The "Default current cycle summary generation" section above produces a fixed, one-cycle executive summary — a high-level snapshot of the current filing period's top donors, spending, and takeaways. But a candidate's financial story often spans multiple cycles, and worth investigating are focused cuts: all corporate/PAC donations across their career, individual donors giving above a threshold in each cycle, or how spending priorities have shifted over time.
+
+This section documents how to build such deep-dive analyses, reusing the existing `analyze-candidate.rb` tool to power them rather than writing parallel scripts.
+
+## Output convention
+
+Deep-dive reports live in a new `deep-dives/` subdirectory alongside the existing `README.md`:
+
+```
+tx-11/august-pfluger/
+├── README.md                          # current-cycle summary (unchanged)
+├── fec/
+├── house-ethics/
+└── deep-dives/
+    ├── full-history.md                # multi-cycle career analysis
+    ├── corporate-donors.md            # focused: corporate/PAC donations
+    └── large-individual-donors.md     # focused: individual donors >$50k per cycle
+```
+
+Each deep-dive file follows the same `$CANDIDATE`/`$DISTRICT`/`$CANDIDATE_DIR` substitution convention already established, and the same "Methodology & AI Transparency" format as the main README, with a verbatim prompt appended for reproducibility.
+
+## Collecting multi-cycle data
+
+To support full-career or multi-year deep dives, you'll need FEC exports for multiple filing periods, not just the current one.
+
+**For each 2-year cycle you want to include:**
+1. Go to https://www.fec.gov/data/ and search your candidate's name.
+2. Find the same committee(s) used in the current cycle (e.g., their principal campaign committee).
+3. For each committee, navigate to the committee page (e.g., https://www.fec.gov/data/committee/C00719294/).
+4. Use the "Browse Receipts" and "Browse Disbursements" sections, exactly as documented in "The FEC" section above: click "Export", save both the processed and raw (efile) CSVs, and take a cash-summary screenshot.
+5. **Drop the resulting `schedule_a-*.csv` and `schedule_b-*.csv` files into the *same* `fec/<committee-id>/` directory you're already using**. There is no new cycle-segmented subdirectory layer. The tool now reads the `two_year_transaction_period` field on each row to sort them by cycle, so older exports and newer exports co-exist in one directory and are automatically segregated by the analysis tool.
+
+**For prior, now-terminated committee IDs:**
+If your candidate ran under a different committee ID in an earlier cycle (discoverable via the FEC committee page's "Affiliated/Related committees" link), create a new `fec/<old-committee-id>/` directory with the same structure as an active committee, and drop the historical exports there. This also protects against a known naming footgun: the script only recognizes committee directories matching `/\AC\d{6,}\z/` (committee ID, C-prefix). If you accidentally name a directory after the FEC candidate ID (H-prefix, e.g. `H6TX11112`) instead of the committee ID, the tool silently finds zero committees and reports all-zero totals with no warning — so use the committee ID consistently.
+
+## New tool flags for deep dives
+
+Run `bundle exec ruby tooling/analyze-candidate.rb --help` to see the full reference, but the key additions are:
+
+| Flag | Purpose | Example |
+|------|---------|---------|
+| `--by-cycle` | Group donors and disbursements by FEC 2-year cycle, newest-first, instead of one combined total. Surfaces cycle-integrity warnings if any rows have mismatched `two_year_transaction_period` and `fec_election_year` fields. | `--by-cycle` |
+| `--cycle YYYY` | Scope the entire report (donors, disbursements, card breakdown) to a single cycle. Overrides `--by-cycle` if both are given. | `--cycle 2026` |
+| `--min-amount N` | In addition to the normal `--top N` table, report *every* donor (subject to any active `--cycle` or `--donor-type` filter) whose aggregate per-donor total is ≥ N. | `--min-amount 50000` |
+| `--donor-type TYPE` | Restrict to `individual` or `committee` donors (using the FEC's `is_individual` field). Note: there is no structured "corporate" field in this data — narrowing to `committee` is the mechanical step; identifying which committees are corporate-PAC-affiliated requires manual inspection of names. | `--donor-type individual` |
+
+## Example deep-dive use cases
+
+**Full career history:** Show all donors and spending across every cycle you've collected:
+```bash
+bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
+```
+
+**Individual donors >$50k aggregate per cycle:**
+```bash
+bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type individual --min-amount 50000
+```
+
+**All committee/PAC donors (corporate, party, leadership PAC, etc.):**
+```bash
+bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee
+```
+
+**Single-cycle deep dive (e.g. 2024-2026):**
+```bash
+bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --cycle 2026
+```
+
+## Deep-dive prompt template
+
+Like "Default current cycle summary generation" above, this is a reusable template for a deep-dive analysis. Fill in the bracketed placeholders and hand the prompt to a fresh LLM session:
+
+```
+CANDIDATE: `Candidate Name`
+DISTRICT: `District Name`
+TOPIC: `Full Career History` or `Corporate & PAC Donors` or `Large Individual Donors (>$50k/cycle)` — whatever this dive investigates.
+TOOL_FLAGS: The `--by-cycle`, `--cycle`, `--min-amount`, and/or `--donor-type` flags to run the analysis with.
+```
+
+**Analyze financial disclosure documents for $CANDIDATE ($DISTRICT) and create a deep-dive report on $TOPIC.**
+
+**Output:**
+- Format: Markdown
+- Filename: `$CANDIDATE_DIR/deep-dives/$TOPIC.md` (use a kebab-case slug of the topic in place of `$TOPIC`, e.g. `full-history.md`, `corporate-donors.md`, `large-individual-donors.md`)
+- Title: `$DISTRICT: $CANDIDATE — $TOPIC`
+- Structure: Adapt the "Key Donors," "Major Spending," and "Takeaways" sections to fit your topic. For a multi-cycle career deep dive, you might instead have per-cycle subsections, trend analysis, or shift analysis. For a donor-type focus like "all corporate/PAC donors," your structure might emphasize industry patterns, donor relationships, or PAC-to-candidate flows rather than top-10 lists.
+- Methodology & AI Transparency section: **Include the verbatim tool command** you used to generate this report (e.g. `bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee`), so readers can reproduce the analysis. Reference the updated header comments in `/tooling/analyze-candidate.rb` regarding cycle integrity and multi-cycle data handling, distinct from the current-cycle summary prompt.
+
+**Tone:** Same as the main README — analytical, conversational for a general political audience.
+
+**Source:** All data from FEC and House Ethics Committee disclosures in the `$CANDIDATE_DIR/` directory. Before writing prose, run the tool's output through the same data-integrity review you would for a summary: **read `/tooling/analyze-candidate.rb`'s header comments in full** — they document cycle-matching gotchas, the multi-committee/multi-cycle data model, and why cycle-integrity warnings exist. Spot-check any surprising findings against the source CSVs before publication."

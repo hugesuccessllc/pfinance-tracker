@@ -1,1 +1,4 @@
 .DS_Store
+.env
+.env.local
+.fec_api_key

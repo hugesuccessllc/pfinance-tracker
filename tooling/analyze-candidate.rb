@@ -99,6 +99,57 @@
 #      giving the committee money. DONOR_LABELS below encodes that allowlist. If a future
 #      FEC export uses different label text, this is the constant to update.
 #
+#   4. Multi-cycle data in the same fec/<committee-id>/ directory — Schedule A and B rows
+#      each carry a `two_year_transaction_period` field (e.g. "2026", "2024") that self-
+#      identifies the FEC 2-year cycle that row belongs to. To build full-career deep dives,
+#      re-run the FEC export UI for each earlier cycle you want to include and drop the
+#      resulting schedule_a-*.csv/schedule_b-*.csv files into the same committee directory.
+#      The tool's --cycle and --by-cycle flags use two_year_transaction_period to filter or
+#      group reports by cycle. Also: candidates may have prior, now-terminated committee IDs
+#      from earlier in their career (discoverable via the FEC committee page's "Affiliated/
+#      Related committees" link) — give each its own fec/<old-committee-id>/ directory,
+#      exactly like an active committee. IMPORTANT: this script's directory-discovery regex
+#      is /\AC\d{6,}\z/ (committee ID, C-prefix) — if you accidentally name a directory for
+#      the candidate ID (H-prefix) instead, the tool finds zero committees and reports all
+#      zeros with no warning (see project memory for documentation of this footgun).
+#
+#   5. The `two_year_transaction_period` and `fec_election_year` fields on each row are
+#      expected to agree (typically both "2026" for a 2024-2026 cycle), but aren't
+#      guaranteed to by the FEC spec. The cycle_integrity_check method counts rows where
+#      these two fields disagree and surfaces them as a warning, rather than silently
+#      assuming agreement. This matches the script's existing posture toward spots where
+#      the FEC data could be ambiguous or inconsistent: count first, ask questions later.
+#
+#   6. A committee directory can hold either itemized data (schedule_a-*.csv /
+#      schedule_b-*.csv, from a normal fec-api-client.rb download) OR a totals.json (from
+#      `fec-api-client.rb --with-affiliated`, which fetches only receipts/disbursements/
+#      cash-on-hand for a candidate's affiliated JFC/leadership PAC — not itemized rows,
+#      since that data can be as large as the principal committee's own). `committees`
+#      only returns the former; totals-only directories are read separately via
+#      `affiliated_committees` and reported in their own section, NOT folded into
+#      donor/disbursement totals — summing a JFC's un-itemized totals into the same
+#      buckets as the principal committee's itemized rows would conflate two different
+#      kinds of number (aggregate vs. line-item) and silently inflate "committee_totals".
+#
+#   7. Schedule A's "Transfers from authorized committees" line (excluded from donor
+#      totals by DONOR_LABELS, per gotcha 3 above) is NOT purely inter-committee pooled-
+#      proceeds transfers. On a principal committee that raises through a JFC, this same
+#      line also carries individual and PAC contributions that were earmarked through the
+#      JFC and are itemized here with the real underlying donor's name and (for PACs) FEC
+#      ID — e.g. August Pfluger's 2026 principal-committee data has $1.69M attributed
+#      directly to the JFC itself, but ALSO $737K across ~300 rows attributed to named
+#      PACs (Johnson & Johnson PAC, Home Depot PAC, Valero PAC, etc., each with a real
+#      contributor_id) and $1.4M across ~500 rows attributed to named individuals with a
+#      blank contributor_id — none of which show up in "Key Donors" because the line label
+#      excludes the whole bucket, JFC-pooled-transfer and earmarked-individual-money alike.
+#      Excluding all of it from donor totals is still the right call (this file's donor
+#      analysis is scoped to the principal committee's own direct receipts, not a JFC
+#      deep-dive), but a report that stops at "Key Donors: $570K" without mentioning this
+#      $3.8M sitting one line below it in the same file would materially understate how
+#      the candidate is actually funded. Surface the transfers-in total and its JFC/PAC/
+#      individual breakdown as context — this is available from the principal committee's
+#      own already-downloaded Schedule A, no separate committee download required.
+#
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
 # each participating committee (the candidate's own campaign, a party committee, allied
@@ -117,6 +168,13 @@
 # "number of trades" or dollar ranges across every PDF in the directory. Check each PDF's
 # own filing-type/status text (and matching dates across filings) before treating two
 # filings as two distinct transactions.
+
+# This tool is usually run from the repo root, but its Gemfile lives here in
+# tooling/ — pin it explicitly so plain `ruby tooling/analyze-candidate.rb`
+# resolves gems correctly from any working directory, without needing
+# `bundle exec` or a BUNDLE_GEMFILE= prefix.
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
+require "bundler/setup"
 
 require "csv"
 require "bigdecimal"
@@ -138,30 +196,104 @@ class FecAnalyzer
 
   Committee = Struct.new(:id, :name, :dir)
 
-  def initialize(fec_dir, top: 15)
+  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil)
     @fec_dir = fec_dir
     @top = top
+    @cycle = cycle
+    @by_cycle = by_cycle
+    @min_amount = min_amount && BigDecimal(min_amount.to_s)
+    @donor_type = donor_type
   end
 
+  # Only committees with itemized schedule_a/b data — a committee downloaded via
+  # --with-affiliated has just a totals.json (see affiliated_committees below) and
+  # would otherwise show up here with a misleading $0.00 in every itemized total.
   def committees
     @committees ||= Dir.children(@fec_dir)
                         .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                        .select { |d| Dir.glob(File.join(@fec_dir, d, "schedule_*.csv")).any? }
                         .sort
                         .map { |id| Committee.new(id, committee_name_for(id), File.join(@fec_dir, id)) }
   end
 
+  # Committees downloaded via --with-affiliated: financial totals only, no itemized
+  # rows. Reported in their own section (see render_affiliated_committees) rather
+  # than folded into the itemized donor/spending analysis above.
+  def affiliated_committees
+    @affiliated_committees ||= Dir.children(@fec_dir)
+                                   .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                                   .select { |d| File.exist?(File.join(@fec_dir, d, "totals.json")) }
+                                   .sort
+                                   .map { |id| load_affiliated_totals(id) }
+  end
+
   def run
-    donors = analyze_donors
-    disbursements = analyze_disbursements
-    {
-      committees: committees.map { |c| { id: c.id, name: c.name } },
-      donors: donors,
-      disbursements: disbursements
-    }
+    if @by_cycle || @cycle
+      result = { committees: committees.map { |c| { id: c.id, name: c.name } },
+                 affiliated_committees: affiliated_committees,
+                 transfer_recipients: analyze_transfer_recipients,
+                 cycle_integrity: cycle_integrity_check }
+      if @by_cycle
+        result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
+          h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
+        end
+      else
+        result[:cycle] = @cycle.to_s
+        result[:donors] = analyze_donors(cycle: @cycle)
+        result[:disbursements] = analyze_disbursements(cycle: @cycle)
+      end
+      result
+    else
+      {
+        committees: committees.map { |c| { id: c.id, name: c.name } },
+        affiliated_committees: affiliated_committees,
+        transfer_recipients: analyze_transfer_recipients,
+        donors: analyze_donors,
+        disbursements: analyze_disbursements
+      }
+    end
   end
 
   def to_text(data)
     io = StringIO.new
+
+    if data[:cycle_integrity] && data[:cycle_integrity][:mismatch_count] > 0
+      io.puts "!! CYCLE INTEGRITY WARNING: #{data[:cycle_integrity][:mismatch_count]} row(s) where " \
+              "two_year_transaction_period != fec_election_year — spot-check before trusting --cycle/--by-cycle grouping:"
+      data[:cycle_integrity][:examples].each do |m|
+        io.puts "  committee=#{m[:committee]} transaction_id=#{m[:transaction_id]} " \
+                "two_year_transaction_period=#{m[:two_year_transaction_period]} fec_election_year=#{m[:fec_election_year]}"
+      end
+      io.puts
+    end
+
+    if data[:cycle]
+      io.puts "Report scoped to FEC 2-year cycle: #{data[:cycle]}"
+      io.puts
+    end
+
+    render_affiliated_committees(io, data[:affiliated_committees])
+    render_transfer_recipients(io, data[:transfer_recipients])
+
+    if data[:by_cycle]
+      data[:by_cycle].each do |cyc, section|
+        io.puts "#" * 80
+        io.puts "CYCLE #{cyc}"
+        io.puts "#" * 80
+        io.puts
+        render_flat_report(io, section)
+        io.puts
+      end
+    else
+      render_flat_report(io, data)
+    end
+
+    io.string
+  end
+
+  private
+
+  def render_flat_report(io, data)
     print_committee_totals(io, "RECEIPTS (itemized, non-memo, donor rows only)", data[:donors][:committee_totals])
     io.puts
     io.puts "Individual vs. Committee/PAC receipts:"
@@ -169,12 +301,16 @@ class FecAnalyzer
     io.puts
 
     print_table(io, "TOP DONORS (deduped by name+employer, across all committees)", data[:donors][:top]) do |row, i|
-      committees_str = row[:by_committee].map { |cid, amt| "#{cid}: #{money(amt)}" }.join(", ")
-      format("%2d. %-35s %12s  | employer: %-30s occ: %-20s %s, %s | %s",
-             i + 1, row[:name][0, 35], money(row[:total]), row[:employer][0, 30], row[:occupation][0, 20],
-             row[:city], row[:state], committees_str)
+      donor_row_line(row, i)
     end
     io.puts
+
+    if data[:donors][:over_threshold]
+      print_table(io, "DONORS AT OR ABOVE THRESHOLD (aggregate, all committees combined)", data[:donors][:over_threshold]) do |row, i|
+        donor_row_line(row, i)
+      end
+      io.puts
+    end
 
     print_committee_totals(io, "DISBURSEMENTS (itemized, non-memo)", data[:disbursements][:committee_totals])
     io.puts
@@ -211,16 +347,81 @@ class FecAnalyzer
     cb[:by_category].each_with_index do |row, i|
       io.puts format("%2d. %-45s %12s", i + 1, row[:category][0, 45], money(row[:total]))
     end
-
-    io.string
   end
 
-  private
+  def donor_row_line(row, i)
+    committees_str = row[:by_committee].map { |cid, amt| "#{cid}: #{money(amt)}" }.join(", ")
+    format("%2d. %-35s %12s  | employer: %-30s occ: %-20s %s, %s | %s",
+           i + 1, row[:name][0, 35], money(row[:total]), row[:employer][0, 30], row[:occupation][0, 20],
+           row[:city], row[:state], committees_str)
+  end
+
+  def cycle_matches?(row, cycle)
+    return true unless cycle
+    row["two_year_transaction_period"].to_s.strip == cycle.to_s
+  end
+
+  def donor_type_matches?(row, donor_type)
+    return true unless donor_type
+    is_individual = row["is_individual"] == "t"
+    donor_type == "individual" ? is_individual : !is_individual
+  end
+
+  def discovered_cycles
+    return [@cycle.to_s] if @cycle
+    cycles = Set.new
+    committees.each do |c|
+      load_rows(c, "schedule_a").each { |r| cycles << r["two_year_transaction_period"].to_s.strip }
+      load_rows(c, "schedule_b").each { |r| cycles << r["two_year_transaction_period"].to_s.strip }
+    end
+    cycles.reject(&:empty?).sort.reverse
+  end
+
+  def cycle_integrity_check
+    mismatches = []
+    committees.each do |c|
+      (load_rows(c, "schedule_a") + load_rows(c, "schedule_b")).each do |row|
+        cyc = row["two_year_transaction_period"].to_s.strip
+        fey = row["fec_election_year"].to_s.strip
+        next if fey.empty? || fey == cyc
+        mismatches << { committee: c.id, transaction_id: row["transaction_id"],
+                        two_year_transaction_period: cyc, fec_election_year: fey }
+      end
+    end
+    { mismatch_count: mismatches.size, examples: mismatches.first(5) }
+  end
+
+  # Reads fec/<id>/totals.json (written by fec-api-client.rb's --with-affiliated)
+  # and picks the cycle matching @cycle, or the most recent one if no --cycle was
+  # given. Returns an :error entry rather than raising if the file is missing or
+  # malformed, so one bad affiliated-committee download doesn't crash the whole run.
+  def load_affiliated_totals(id)
+    data = JSON.parse(File.read(File.join(@fec_dir, id, "totals.json")))
+    by_cycle = data["totals_by_cycle"] || []
+    entry = @cycle ? by_cycle.find { |t| t["cycle"].to_i == @cycle.to_i } : by_cycle.max_by { |t| t["cycle"].to_i }
+
+    {
+      id: id,
+      name: data["name"] || id,
+      designation: data["designation_full"],
+      cycle: entry && entry["cycle"],
+      receipts: entry && entry["receipts"],
+      disbursements: entry && entry["disbursements"],
+      # PAC/JFC totals use last_cash_on_hand_end_period; principal committees use
+      # cash_on_hand_end_period. Field name depends on committee_type, not consistent
+      # across the API — check both rather than assuming one.
+      cash_on_hand_end_period: entry && (entry["cash_on_hand_end_period"] || entry["last_cash_on_hand_end_period"])
+    }
+  rescue StandardError => e
+    { id: id, name: id, error: e.message }
+  end
 
   def committee_name_for(id)
     %w[schedule_a schedule_b efile].each do |schedule|
-      Dir.glob(File.join(@fec_dir, id, "#{schedule}-*.csv")).each do |path|
-        CSV.foreach(path, headers: true) do |row|
+      Dir.glob(File.join(@fec_dir, id, "#{schedule}-*")).each do |path|
+        csv_data = read_csv_file(path)
+        next unless csv_data
+        CSV.parse(csv_data, headers: true) do |row|
           return row["committee_name"].to_s.strip unless row["committee_name"].to_s.strip.empty?
         end
       end
@@ -229,9 +430,17 @@ class FecAnalyzer
   end
 
   def load_rows(committee, schedule)
-    Dir.glob(File.join(committee.dir, "#{schedule}-*.csv")).flat_map do |path|
-      CSV.read(path, headers: true).map(&:to_h)
+    Dir.glob(File.join(committee.dir, "#{schedule}-*")).flat_map do |path|
+      csv_data = read_csv_file(path)
+      next unless csv_data
+      CSV.parse(csv_data, headers: true).map(&:to_h)
     end
+  end
+
+  def read_csv_file(filepath)
+    File.read(filepath)
+  rescue StandardError
+    nil
   end
 
   def decimal(value)
@@ -242,7 +451,7 @@ class FecAnalyzer
     format("$%.2f", bd)
   end
 
-  def analyze_donors
+  def analyze_donors(cycle: @cycle, donor_type: @donor_type, min_amount: @min_amount)
     totals = Hash.new(BigDecimal(0))
     meta = {}
     committee_totals = Hash.new(BigDecimal(0))
@@ -252,6 +461,8 @@ class FecAnalyzer
       load_rows(committee, "schedule_a").each do |row|
         next if row["memo_code"] == "X"
         next unless DONOR_LABELS.include?(row["line_number_label"].to_s.strip)
+        next unless cycle_matches?(row, cycle)
+        next unless donor_type_matches?(row, donor_type)
 
         # Sum every in-scope row, positive or negative — chargebacks/reattributions net
         # against the donor's other gifts rather than being silently discarded.
@@ -277,16 +488,57 @@ class FecAnalyzer
       end
     end
 
-    top = totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
+    qualifying = totals.select { |_k, v| v > 0 }
+    top = qualifying.sort_by { |_k, v| -v }.first(@top).map { |key, total| meta[key].merge(total: total) }
 
-    {
+    result = {
       committee_totals: committee_totals,
       individual_vs_committee: individual_vs_committee,
       top: top
     }
+
+    if min_amount
+      result[:over_threshold] = qualifying.select { |_k, v| v >= min_amount }
+                                           .sort_by { |_k, v| -v }
+                                           .map { |key, total| meta[key].merge(total: total) }
+    end
+
+    result
   end
 
-  def analyze_disbursements
+  # Schedule B already carries a recipient_committee_id field whenever the payee is
+  # itself a political committee (e.g. a party committee, another candidate's
+  # committee, a PAC) — no extra API call needed to see this, since it's part of
+  # the principal committee's own downloaded data. Surfaced separately from
+  # top_payees so a human/LLM writing the summary has raw material to name
+  # candidates for a deliberate, separate follow-up download (see
+  # fec-api-client.rb --download --committee-id) — this method does NOT download
+  # or itemize anything itself, and deciding which (if any) are worth pursuing is
+  # explicitly left to whoever reads the report, not automated.
+  def analyze_transfer_recipients(cycle: @cycle)
+    totals = Hash.new(BigDecimal(0))
+    meta = {}
+
+    committees.each do |committee|
+      load_rows(committee, "schedule_b").each do |row|
+        next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
+
+        recipient_id = row["recipient_committee_id"].to_s.strip
+        next if recipient_id.empty?
+
+        amount = decimal(row["disbursement_amount"])
+        totals[recipient_id] += amount
+        meta[recipient_id] ||= { name: row["recipient_name"].to_s.strip }
+      end
+    end
+
+    totals.select { |_k, v| v > 0 }
+          .sort_by { |_k, v| -v }
+          .map { |id, total| meta[id].merge(committee_id: id, total: total) }
+  end
+
+  def analyze_disbursements(cycle: @cycle)
     category_totals = Hash.new(BigDecimal(0))
     category_counts = Hash.new(0)
     payee_totals = Hash.new(BigDecimal(0))
@@ -297,6 +549,7 @@ class FecAnalyzer
     committees.each do |committee|
       load_rows(committee, "schedule_b").each do |row|
         next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
 
         # Sum every non-memo row, positive or negative — vendor credits/refunds net
         # against that vendor's other charges rather than being silently discarded.
@@ -337,7 +590,7 @@ class FecAnalyzer
       by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total, count: category_counts[cat] } },
       top_payees: payee_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| payee_meta[payee].merge(payee: payee, total: total) },
       top_single: all_disbursements.sort_by { |r| -r[:amount] }.first(@top),
-      card_breakdown: analyze_card_breakdown
+      card_breakdown: analyze_card_breakdown(cycle: cycle)
     }
   end
 
@@ -358,7 +611,7 @@ class FecAnalyzer
   # back_reference_transaction_id at all, but the memo rows still carry real merchant
   # names. When no back-referenced parents exist, parent_total/parent_count stay 0 and
   # coverage_pct reports nil ("n/a") rather than guessing at a lump total to compare against.
-  def analyze_card_breakdown
+  def analyze_card_breakdown(cycle: @cycle)
     vendor_totals = Hash.new(BigDecimal(0))
     vendor_meta = {}
     category_totals = Hash.new(BigDecimal(0))
@@ -368,7 +621,7 @@ class FecAnalyzer
     child_count = 0
 
     committees.each do |committee|
-      rows = load_rows(committee, "schedule_b")
+      rows = load_rows(committee, "schedule_b").select { |r| cycle_matches?(r, cycle) }
       memo_rows = rows.select { |r| r["memo_code"] == "X" }
       next if memo_rows.empty?
 
@@ -403,6 +656,42 @@ class FecAnalyzer
       top_vendors: vendor_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| vendor_meta[payee].merge(payee: payee, total: total) },
       by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total } }
     }
+  end
+
+  def render_affiliated_committees(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "AFFILIATED COMMITTEES (totals only, not itemized — see fec/<id>/totals.json)"
+    io.puts "=" * 80
+    list.each do |c|
+      if c[:error]
+        io.puts "#{c[:name]} [#{c[:id]}]: could not read totals.json (#{c[:error]})"
+      elsif c[:cycle].nil?
+        io.puts "#{c[:name]} [#{c[:id]}] (#{c[:designation]}): no totals for the requested cycle"
+      else
+        io.puts "#{c[:name]} [#{c[:id]}] (#{c[:designation]}), cycle #{c[:cycle]}: " \
+                "receipts #{money_or_na(c[:receipts])}, disbursements #{money_or_na(c[:disbursements])}, " \
+                "cash on hand #{money_or_na(c[:cash_on_hand_end_period])}"
+      end
+    end
+    io.puts
+  end
+
+  def render_transfer_recipients(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "COMMITTEES SEEN AS TRANSFER RECIPIENTS (from this committee's own Schedule B — " \
+            "NOT independently downloaded or itemized; a human/LLM call on whether any are worth " \
+            "a separate --download pass)"
+    io.puts "=" * 80
+    list.each { |r| io.puts "#{r[:name]} [#{r[:committee_id]}]: #{money(r[:total])}" }
+    io.puts
+  end
+
+  def money_or_na(value)
+    value.nil? ? "n/a" : money(BigDecimal(value.to_s))
   end
 
   def print_committee_totals(io, title, totals)
@@ -482,6 +771,10 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--top N", Integer, "Rows per top-N table (default 15)") { |v| options[:top] = v }
     opts.on("--format FORMAT", %w[text json], "Output format: text (default) or json") { |v| options[:format] = v }
     opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
+    opts.on("--cycle YYYY", Integer, "Scope the whole report to a single 2-year FEC cycle (two_year_transaction_period), e.g. --cycle 2026. Applies to both donors and disbursements. Default: combined across all cycles present.") { |v| options[:cycle] = v }
+    opts.on("--by-cycle", "Group donor/disbursement tables into one section per 2-year cycle instead of one combined total. Intended for multi-cycle/full-history data collected into the same fec/<committee-id>/ directories.") { options[:by_cycle] = true }
+    opts.on("--min-amount N", Float, "In addition to the normal --top table, report ALL donors (subject to any active --cycle/--donor-type filter) whose aggregate contribution total is >= N. E.g. --min-amount 50000.") { |v| options[:min_amount] = v }
+    opts.on("--donor-type TYPE", %w[individual committee], "Restrict donor analysis to individual donors or committee/PAC donors (is_individual field). No structured 'corporate' field exists in this data — see README.") { |v| options[:donor_type] = v }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -491,13 +784,17 @@ if $PROGRAM_NAME == __FILE__
   abort "analyze-candidate.rb: --fec-dir is required (see --help)" unless options[:fec_dir]
   abort "analyze-candidate.rb: no such directory #{options[:fec_dir]}" unless Dir.exist?(options[:fec_dir])
 
-  fec = FecAnalyzer.new(options[:fec_dir], top: options[:top])
+  fec = FecAnalyzer.new(options[:fec_dir], top: options[:top], cycle: options[:cycle],
+                         by_cycle: options[:by_cycle], min_amount: options[:min_amount],
+                         donor_type: options[:donor_type])
   fec_data = fec.run
 
   house_ethics_data = nil
+  house_ethics_scanner = nil
   if options[:house_ethics_dir]
     abort "analyze-candidate.rb: no such directory #{options[:house_ethics_dir]}" unless Dir.exist?(options[:house_ethics_dir])
-    house_ethics_data = HouseEthicsScanner.new(options[:house_ethics_dir]).run
+    house_ethics_scanner = HouseEthicsScanner.new(options[:house_ethics_dir])
+    house_ethics_data = house_ethics_scanner.run
   end
 
   output =
@@ -518,7 +815,7 @@ if $PROGRAM_NAME == __FILE__
       out = fec.to_text(fec_data)
       if house_ethics_data
         out += "\n"
-        out += HouseEthicsScanner.new(options[:house_ethics_dir]).to_text(house_ethics_data)
+        out += house_ethics_scanner.to_text(house_ethics_data)
       end
       out
     end

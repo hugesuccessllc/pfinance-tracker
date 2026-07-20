@@ -62,7 +62,7 @@ Add it up and the four categories above — fine dining ($264,658.12), retreats 
 
 1. **The fundraising apparatus is the point, not a side effect.** Most of the dining and lodging charges above are filed by the campaign itself as "Solicitation and Fundraising" or "Campaign Event" expenses — not staff meals, not constituent outreach. The steakhouses and ski lodges *are* the fundraising operation.
 
-2. **The venues select for a donor, not a voter.** A $150,000-initiation golf club, a five-star ski lodge, a Republicans-only private club two blocks from the Capitol — these aren't places an average TX-11 resident in Abilene or San Angelo will ever set foot in. They're built to be comfortable for exactly the kind of donor Pfluger's top contributor list shows: energy-industry executives and the PACs that represent them.
+2. **The venues select for a donor, not a voter.** A $150,000-initiation golf club, a five-star ski lodge, a Republicans-only private club two blocks from the Capitol — these aren't places an average TX-11 resident in Odessa or San Angelo will ever set foot in. They're built to be comfortable for exactly the kind of donor Pfluger's top contributor list shows: energy-industry executives and the PACs that represent them.
 
 3. **It's a closed loop.** Oil and gas money — Permian Basin operators, Koch, Valero, API — funds a campaign that spends a meaningful share of it wining and dining more of the same donor class at venues most of those donors would recognize from their own personal lives. The transaction isn't really "candidate meets voter"; it's "campaign apparatus meets checkbook," repeated at Capital Grille tables and Deer Valley lodges instead of union halls or diners.
 

@@ -47,6 +47,38 @@ class FecApiClient
   # rediscovering the bloat by staring at file sizes again.
   NESTED_METADATA_FIELDS = %w[committee recipient_committee contributor].freeze
 
+  # Same shape analyze-candidate.rb uses to pick committee directories out of a
+  # candidate's fec/ tree. Enforced here too, on write: committee_id reaches
+  # download_committee_data/download_committee_totals both from the operator's own
+  # --committee-id/--affiliated-committee-id flags AND from discover_affiliated_committee,
+  # which resolves an ID out of an OpenFEC committee-name search response. That response is
+  # attacker-reachable in principle (a compromised/MITM'd API response, or a future bug in
+  # FEC's own data), and every one of these IDs ends up in a File.join(...)/mkdir_p — so a
+  # value like "../../etc" would be a path-traversal write primitive if it ever slipped
+  # through unvalidated. Reject anything that isn't a real committee ID before it touches
+  # the filesystem, regardless of how much we trust the source it came from.
+  COMMITTEE_ID_PATTERN = /\AC\d{6,}\z/.freeze
+
+  # Columns this tool or analyze-candidate.rb/vendor-keyword-scan.rb parses
+  # programmatically (BigDecimal amounts, IDs used for back-reference matching, dates/
+  # cycles compared as strings, enum-like code/label fields). Excluded from the CSV-
+  # injection neutralization in neutralize_csv_cell below since prefixing them would break
+  # that parsing — the injection risk lives entirely in the free-text fields (names,
+  # employer/occupation, descriptions, memo text), which is exactly what gets neutralized.
+  CSV_SAFE_FIELDS = %w[
+    contribution_receipt_amount disbursement_amount transaction_id
+    back_reference_transaction_id two_year_transaction_period fec_election_year
+    contribution_receipt_date disbursement_date memo_code is_individual
+    recipient_committee_id contributor_id committee_id amendment_indicator
+    line_number_label category_code_full
+  ].freeze
+
+  # efile csv_url values are meant to point at FEC's own document store (observed in
+  # practice: https://docquery.fec.gov/csv/...) but come from an API response, not a
+  # hardcoded constant — restrict what we'll actually fetch to https + *.fec.gov so a
+  # compromised/spoofed response can't turn this into an arbitrary-URL fetch.
+  ALLOWED_CSV_HOSTS = /(\A|\.)fec\.gov\z/i.freeze
+
   def initialize(api_key_file: ".fec_api_key")
     @api_key = load_api_key(api_key_file)
     abort "fec-api-client.rb: FEC API key not found (expected #{api_key_file})" unless @api_key
@@ -54,6 +86,7 @@ class FecApiClient
 
   # Download all schedule data for a committee via the OpenFEC API
   def download_committee_data(committee_id, output_dir, principal: false, with_affiliated: false, affiliated_committee_id: nil, cycle: nil)
+    validate_committee_id!(committee_id)
     committee_dir = File.join(output_dir, committee_id)
 
     puts "=" * 80
@@ -201,6 +234,7 @@ class FecApiClient
   # through it without pulling its full transaction history, which for some
   # affiliated committees can dwarf the principal committee's own itemized data.
   def download_committee_totals(committee_id, output_dir, cycle: nil)
+    validate_committee_id!(committee_id)
     committee_dir = File.join(output_dir, committee_id)
     FileUtils.mkdir_p(committee_dir)
 
@@ -353,6 +387,27 @@ class FecApiClient
 
   private
 
+  def validate_committee_id!(committee_id)
+    return if committee_id.to_s.match?(COMMITTEE_ID_PATTERN)
+    abort "fec-api-client.rb: invalid committee ID #{committee_id.inspect} " \
+          "(expected FEC committee ID shape: C followed by 6+ digits) — refusing to use it in a filesystem path"
+  end
+
+  # FEC filers supply these fields as free text (contributor/recipient names, employer,
+  # occupation, city, descriptions, memo text) — nothing stops a committee from filing a
+  # name like "=cmd|'/c calc'!A1" or "@SUM(1+1)". Excel/Sheets/Numbers treat a leading
+  # =, +, -, @, tab, or CR as the start of a formula or DDE command when a CSV is opened
+  # directly, so neutralize those fields on write by prefixing with a straight quote —
+  # visible, literal text, not evaluated. Our own tooling only ever reads this data as
+  # plain strings (see CSV_SAFE_FIELDS for the columns that are actually parsed/compared
+  # programmatically and must stay untouched).
+  def neutralize_csv_cell(header, value)
+    return value if CSV_SAFE_FIELDS.include?(header)
+    str = value.to_s
+    return value if str.empty? || !str.match?(/\A[=+\-@\t\r]/)
+    "'#{str}"
+  end
+
   def download_schedule(schedule, committee_id, output_dir, cycle: nil)
     puts "Downloading #{schedule}#{cycle ? " (cycle #{cycle})" : ""}..."
 
@@ -408,7 +463,7 @@ class FecApiClient
       if results.any? && headers
         File.open(filepath, "a") do |f|
           csv = CSV.new(f)
-          results.each { |row| csv << headers.map { |h| row[h] } }
+          results.each { |row| csv << headers.map { |h| neutralize_csv_cell(h, row[h]) } }
           csv.flush
           f.flush
         end
@@ -517,6 +572,12 @@ class FecApiClient
 
   def download_external_csv(url, retry_count: 0, max_retries: 5)
     uri = URI(url)
+
+    unless uri.is_a?(URI::HTTPS) && uri.host.to_s.match?(ALLOWED_CSV_HOSTS)
+      warn "  ⚠ Refusing to fetch efile CSV from unexpected host: #{url.inspect} (expected https on *.fec.gov)"
+      return nil
+    end
+
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     http.open_timeout = 30

@@ -57,6 +57,39 @@ ruby tooling/analyze-candidate.rb \
 - Multi-cycle support requires historical FEC exports. Drop older CSVs into the same `fec/<committee-id>/` directory; the tool reads `two_year_transaction_period` per row to segregate them.
 - Before writing new analysis tools for a candidate, check whether `analyze-candidate.rb` can be extended with a new flag instead.
 
+## vendor-keyword-scan.rb
+
+**Purpose:** Line-referenced keyword search over a candidate's Schedule B (disbursements) data. Where `analyze-candidate.rb` answers "who got paid the most, in what category," this tool answers a narrower question — "show me every disbursement row whose vendor name or description matches one of these keywords, with an exact file and line number for each" — for building a themed report (dining, lodging, gifts, a specific vendor) where you need to cite a receipt, not just a total. It does not editorialize: it prints matched rows and per-group subtotals; grouping keywords into categories and writing prose about what a pattern means is the caller's job.
+
+**Usage:**
+
+```bash
+ruby tooling/vendor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec \
+  --group "Fine Dining=capital grille,del frisco,oceanaire,tosca" \
+  --group "Lodging=hilton,marriott,ritz,st. regis,four seasons"
+
+ruby tooling/vendor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec \
+  --keywords "steakhouse,chophouse" --format json
+```
+
+**Flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `--fec-dir DIR` | Candidate's `fec/` directory |
+| `--group "Name=kw1,kw2,..."` | Named keyword group (repeatable); matches are case-insensitive substrings against `recipient_name`, `disbursement_description`, and `memo_text` |
+| `--keywords LIST` | Shorthand for a single unnamed group ("Matches") |
+| `--cycle YYYY` | Scope to one `two_year_transaction_period` |
+| `--include-efile-gap` | Also scan raw `efile-*.csv` rows dated after `schedule_b`'s own latest date — see "The efile gap" below |
+| `--format json` | JSON instead of text |
+| `--out FILE` | Write to a file instead of stdout |
+
+**Line numbers:** matches are reported with the exact physical line number in the source CSV (via Ruby CSV's `lineno`, which correctly accounts for multi-line quoted fields, not just logical row index) — the line a human lands on opening the file in an editor or running `sed -n '<line>p' <file>`.
+
+**The efile gap.** fec.gov's `schedule_b-*.csv` is a "processed" export that can lag a campaign's actual raw filings by months — observed on Pfluger's principal committee and JFC, where `schedule_b` stopped three months before the raw `efile-*.csv` did. `--include-efile-gap` does **not** blindly merge the two (spot-checking found `efile` and `schedule_b` `transaction_id` values don't reliably match for the same transaction, so naive dedup isn't safe — see the double-count warning in the script's header). Instead, per committee, it finds `schedule_b`'s own latest `disbursement_date` and scans only the disbursement-shaped efile rows dated strictly after that — a window `schedule_b` provably has zero rows in. Matches sourced this way are tagged `[efile, not yet in processed export]` (or `"source": "efile-gap"` in JSON).
+
+**Caveats:** substring matching both over- and under-catches — spot-check matches before publishing a total, and see the script's header comments for the full list of gotchas (memo/card sub-item accounting, negative-amount corrections, the efile-gap mechanics).
+
 ## fec-api-client.rb
 
 **Status: experimental.** A single working session on this tool turned up three non-trivial correctness bugs: silent pagination duplication (re-fetched the same 100 rows repeatedly instead of paging, which inflated a real $2,500 contribution into an apparent $402,500 one), ~5x file bloat from duplicated embedded metadata, and a request that could hang indefinitely despite configured timeouts. All three are fixed and verified against the live API, but that track record means this tool hasn't yet earned default trust — see the main [README.md](../README.md) for why manual export is the current recommended starting point. If you do use this tool, spot-check its output (e.g. confirm unique `transaction_id` count matches row count) before trusting any total downstream.

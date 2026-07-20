@@ -20,13 +20,12 @@
 #
 # DATA-MINING STRATEGY (read this before changing the filters below)
 #
-# This file only reads schedule_a-*.csv (receipts) and schedule_b-*.csv (disbursements) —
-# fec.gov's "processed" bulk exports. Each committee directory also tends to accumulate
-# efile-*.csv files (the campaign's raw electronic submission) from re-running the FEC
-# export UI — DO NOT glob those in here. They cover largely the same transactions as
-# schedule_a/schedule_b in a different shape, and reading both would double-count. If you
-# ever need the raw efile data for a field schedule_a/b doesn't carry, join it in as a
-# separate pass rather than summing across both file sets.
+# This file's primary source is schedule_a-*.csv (receipts) and schedule_b-*.csv
+# (disbursements) — fec.gov's "processed" bulk exports. Each committee directory also tends
+# to accumulate efile-*.csv files (the campaign's raw electronic submission) from re-running
+# the FEC export UI. For the date range schedule_a/b already cover, efile rows are NOT read —
+# they largely duplicate the same transactions in a different shape, and summing both would
+# double-count (see gotcha 8 for the one place efile IS read, and why that's safe).
 #
 # FEC's processed schedule_a/schedule_b exports appear to already resolve amendments —
 # in the committees checked so far, transaction_id is unique per file except for a couple
@@ -150,6 +149,72 @@
 #      individual breakdown as context — this is available from the principal committee's
 #      own already-downloaded Schedule A, no separate committee download required.
 #
+#   8. fec.gov's "processed" schedule_a/schedule_b bulk exports can lag well behind what a
+#      committee has actually filed — the raw efile data (efile-*.csv) can extend weeks or
+#      months past the processed export's own last date. This surfaced on Claire Reynolds's
+#      committee (C00929711, TX-11): a schedule_a export pulled 2026-07-18 stopped at
+#      2026-03-31 (the end of Q1), while that same directory's efile-*.csv already had two
+#      more months of itemized receipts (through 2026-06-30, Q2) — a report generated from
+#      schedule_a/b alone would have silently missed a whole quarter, without any warning,
+#      just because the processed export happened to be exported before FEC finished
+#      reprocessing the newer filing.
+#
+#      To catch this without reintroducing the double-counting problem gotcha 8's intro
+#      warns about, this script now reads efile-*.csv, but ONLY for the narrow slice of rows
+#      dated strictly AFTER the max date already present in that committee's own
+#      schedule_a/schedule_b — i.e. only genuinely new territory the processed export
+#      hasn't caught up to yet. Anything at or before that ceiling date is left to the
+#      processed files exactly as before; efile is never used to override or supplement an
+#      already-covered period, which is what makes this safe against double-counting without
+#      needing to fully solve amendment reconciliation in general.
+#
+#      Two more wrinkles specific to efile, once you're in that gap window:
+#
+#      - efile amendment pairs don't reliably share a transaction_id. Reynolds's Q2 data has
+#        two file_numbers covering the same period, one filed 2026-07-14 and a corrected one
+#        filed 2026-07-16; 123 of 124 rows share a transaction_id across the pair (plain
+#        transaction_id dedup — keep the later load_timestamp — handles those), but a $5,000
+#        "VOTE SAVE AMERICA" contribution was originally itemized under Schedule A line 11AI
+#        (individual) as transaction SA11AI.5956, then re-filed under line 11C (political
+#        committee) as a DIFFERENT transaction id, SA11C.6056 — correcting a misclassified
+#        PAC check. Transaction_id dedup alone would count this $5,000 twice (once under each
+#        id). A second dedup pass groups remaining gap rows by (date, amount, contributor/
+#        recipient name) and keeps only the latest load_timestamp per group, which correctly
+#        collapses this pair down to the corrected, later version.
+#
+#      - Do NOT extend this "supersede the earlier file" logic to whole files/date-ranges,
+#        only to matched rows. Pfluger's C00719294 disbursement efile has two file_numbers
+#        whose date ranges overlap (one covers 2025-12-24..2026-03-31, the other
+#        2026-02-11..2026-06-30) but share ZERO transaction_ids — they are two genuinely
+#        separate filings that happen to both touch some of the same calendar dates, not an
+#        original+amendment pair. Discarding the earlier file wholesale (instead of deduping
+#        row-by-row) would have silently dropped 239 real disbursements. Because gap-filling
+#        here only ever looks at rows past the processed ceiling date, this particular
+#        overlap (entirely before that committee's own ceiling) never even enters the gap
+#        window — but if you're tempted to generalize this logic beyond the gap window, don't
+#        do it by file/date-range; only ever supersede by matched row identity.
+#
+#      efile's Schedule A rows lack the processed export's human-readable
+#      `line_number_label` column, so gap-filled receipts are classified via `line_number`
+#      (11AI = individual, 11C = political committee/PAC, matching DONOR_LABELS' intent) and
+#      the `entity_type` column (IND/PAC) instead; anything else (11D transfers, loans, etc.)
+#      is left out of donor totals, same as the processed-export DONOR_LABELS allowlist does.
+#      Schedule B gap rows carry no equivalent ambiguity — like the processed-export path,
+#      every non-memo row counts, regardless of line_number.
+#
+#      One more casing wrinkle, also surfaced by Reynolds's data: processed schedule_a
+#      exports consistently render donor names/employers in ALL CAPS, but raw efile data
+#      does not ("BOISSEAU, JAY" / "GOOGLE" vs "Boisseau, Jay" / "Google" for the same
+#      person's Q1 and Q2 checks). analyze_donors's dedup key upcases both name and employer
+#      before grouping for exactly this reason — without it, the same donor's processed-era
+#      and gap-filled-era contributions would silently split into two "different" people in
+#      the top-donor table instead of summing to one.
+#
+#      A committee whose efile directory holds only one schedule's raw export (e.g. only the
+#      Receipts-page "raw data" button was ever clicked, never the Disbursements page's) will
+#      simply have no Schedule B gap rows to add — this is a Step 1 collection gap, not
+#      something Step 2 can infer or fill in.
+
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
 # each participating committee (the candidate's own campaign, a party committee, allied
@@ -177,6 +242,7 @@ ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
 require "bundler/setup"
 
 require "csv"
+require "date"
 require "bigdecimal"
 require "json"
 require "optparse"
@@ -193,6 +259,12 @@ class FecAnalyzer
     "Contributions From Individuals/Persons Other Than Political Committees",
     "Contributions From Other Political Committees"
   ].freeze
+
+  # efile Schedule A rows carry a numeric line_number instead of the processed export's
+  # line_number_label text (see gotcha 8) — these are the raw-schedule equivalents of the
+  # two DONOR_LABELS entries above (11AI = individuals, 11C = other political committees).
+  EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
+  EFILE_COMMITTEE_LINES = %w[11C].freeze
 
   Committee = Struct.new(:id, :name, :dir)
 
@@ -232,7 +304,8 @@ class FecAnalyzer
       result = { committees: committees.map { |c| { id: c.id, name: c.name } },
                  affiliated_committees: affiliated_committees,
                  transfer_recipients: analyze_transfer_recipients,
-                 cycle_integrity: cycle_integrity_check }
+                 cycle_integrity: cycle_integrity_check,
+                 efile_gaps: efile_gaps(cycle: @cycle) }
       if @by_cycle
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
           h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
@@ -248,6 +321,7 @@ class FecAnalyzer
         committees: committees.map { |c| { id: c.id, name: c.name } },
         affiliated_committees: affiliated_committees,
         transfer_recipients: analyze_transfer_recipients,
+        efile_gaps: efile_gaps(cycle: @cycle),
         donors: analyze_donors,
         disbursements: analyze_disbursements
       }
@@ -281,6 +355,7 @@ class FecAnalyzer
       io.puts
     end
 
+    render_efile_gaps(io, data[:efile_gaps])
     render_affiliated_committees(io, data[:affiliated_committees])
     render_transfer_recipients(io, data[:transfer_recipients])
 
@@ -376,6 +451,11 @@ class FecAnalyzer
     donor_type == "individual" ? is_individual : !is_individual
   end
 
+  def donor_type_matches_efile?(is_individual, donor_type)
+    return true unless donor_type
+    donor_type == "individual" ? is_individual : !is_individual
+  end
+
   def discovered_cycles
     return [@cycle.to_s] if @cycle
     cycles = Set.new
@@ -398,6 +478,120 @@ class FecAnalyzer
       end
     end
     { mismatch_count: mismatches.size, examples: mismatches.first(5) }
+  end
+
+  # See gotcha 8. Loads every efile-*.csv row in a committee's directory, tagging each with
+  # which schedule it structurally matches (by header presence, not filename) so callers can
+  # select :receipts or :disbursements without caring which raw file it came from.
+  def load_efile_rows(committee)
+    @efile_cache ||= {}
+    @efile_cache[committee.dir] ||= Dir.glob(File.join(committee.dir, "efile-*.csv")).flat_map do |path|
+      csv_data = read_csv_file(path)
+      next [] unless csv_data
+      table = CSV.parse(csv_data, headers: true)
+      shape = if table.headers.include?("contribution_receipt_amount")
+                :receipts
+              elsif table.headers.include?("disbursement_amount")
+                :disbursements
+              end
+      next [] unless shape
+      table.map { |row| row.to_h.merge("_shape" => shape) }
+    end
+  end
+
+  def parse_date(value)
+    Date.parse(value.to_s.strip)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  # The latest date already present in a committee's processed schedule_a/schedule_b —
+  # the "ceiling" past which efile gap-filling is allowed to look (see gotcha 8). Not
+  # cycle-scoped: this asks "how current is the processed export," a fact independent of
+  # which cycle a given report run is filtering to.
+  def processed_max_date(committee, schedule)
+    date_field = schedule == "schedule_a" ? "contribution_receipt_date" : "disbursement_date"
+    load_rows(committee, schedule).filter_map { |r| parse_date(r[date_field]) }.max
+  end
+
+  def efile_contributor_name(row)
+    parts = [row["contributor_last_name"], row["contributor_first_name"], row["contributor_middle_name"]]
+            .map { |p| p.to_s.strip }.reject(&:empty?)
+    return parts.first.to_s if parts.size <= 1
+    "#{parts[0]}, #{parts[1..].join(' ')}"
+  end
+
+  # Rows from raw efile-*.csv data, restricted to the shape (:receipts or :disbursements)
+  # requested, dated strictly after ceiling_date (the processed export's own coverage — see
+  # processed_max_date), and within two years of the requested cycle if one is given (efile
+  # rows don't carry two_year_transaction_period, so this is an approximation by calendar
+  # year rather than an exact match).
+  #
+  # Two dedup passes handle FEC's amendment behavior in raw efile data (see gotcha 8 for the
+  # concrete cases that motivated each):
+  #   1. By transaction_id (keep the latest load_timestamp per id) — catches straightforward
+  #      resubmissions of the same line.
+  #   2. By natural key (date + amount + counterparty name) — catches the rarer case where an
+  #      amendment reclassifies a row under a NEW transaction_id (e.g. a contribution refiled
+  #      from an individual line to a political-committee line), which pass 1 alone would
+  #      miss and double-count.
+  #
+  # Returns [] if ceiling_date is nil — meaning this committee has no processed data for
+  # this schedule at all, so there's no established coverage boundary to gap-fill past; the
+  # normal load_rows path (which returns nothing for a nonexistent schedule) already reflects
+  # that correctly, and gap-filling shouldn't try to invent a start point.
+  def efile_gap_rows(committee, shape, ceiling_date, cycle)
+    return [] unless ceiling_date
+
+    date_field = shape == :receipts ? "contribution_receipt_date" : "disbursement_date"
+    amount_field = shape == :receipts ? "contribution_receipt_amount" : "disbursement_amount"
+
+    dated = load_efile_rows(committee).each_with_object([]) do |row, acc|
+      next unless row["_shape"] == shape
+      next if row["memo_code"] == "X"
+      d = parse_date(row[date_field])
+      next unless d && d > ceiling_date
+      next if cycle && !(d.year == cycle.to_i || d.year == cycle.to_i - 1)
+      acc << [d, row]
+    end
+
+    by_transaction = dated.group_by { |(_, row)| row["transaction_id"].to_s }
+    pass1 = by_transaction.flat_map do |txn_id, group|
+      txn_id.empty? ? group : [group.max_by { |(_, row)| row["load_timestamp"].to_s }]
+    end
+
+    natural_key = lambda do |(d, row)|
+      counterparty = shape == :receipts ? efile_contributor_name(row) : row["recipient_name"].to_s.strip
+      [d, row[amount_field].to_s.strip, counterparty]
+    end
+    pass2 = pass1.group_by(&natural_key).map { |_, group| group.max_by { |(_, row)| row["load_timestamp"].to_s } }
+
+    pass2.map { |(_, row)| row }
+  end
+
+  # Diagnostic summary (not itself used for any total) of how far each committee's efile
+  # data extends past its own processed schedule_a/schedule_b coverage, scoped to the same
+  # cycle as the rest of the run so the reported "N rows / $X added" figures match exactly
+  # what analyze_donors/analyze_disbursements actually folded in above.
+  def efile_gaps(cycle: @cycle)
+    committees.each_with_object([]) do |committee, gaps|
+      [["schedule_a", :receipts, "contribution_receipt_amount", "Schedule A (receipts)"],
+       ["schedule_b", :disbursements, "disbursement_amount", "Schedule B (disbursements)"]].each do |schedule, shape, amount_field, label|
+        ceiling = processed_max_date(committee, schedule)
+        rows = efile_gap_rows(committee, shape, ceiling, cycle)
+        next if rows.empty?
+
+        gaps << {
+          committee_id: committee.id,
+          committee_name: committee.name,
+          schedule: label,
+          processed_through: ceiling,
+          efile_through: rows.filter_map { |r| parse_date(r[shape == :receipts ? "contribution_receipt_date" : "disbursement_date"]) }.max,
+          row_count: rows.size,
+          total: rows.sum { |r| decimal(r[amount_field]) }
+        }
+      end
+    end
   end
 
   # Reads fec/<id>/totals.json (written by fec-api-client.rb's --with-affiliated)
@@ -466,6 +660,29 @@ class FecAnalyzer
     committee_totals = Hash.new(BigDecimal(0))
     individual_vs_committee = Hash.new(BigDecimal(0))
 
+    record_donor = lambda do |committee, name:, employer:, occupation:, city:, state:, amount:, is_individual:|
+      next if name.empty?
+
+      # Case-normalize the dedup key: processed schedule_a exports are consistently
+      # ALL CAPS, but raw efile data (folded in for gap-filling, see gotcha 8) uses mixed
+      # case for the same names — without this, "BOISSEAU, JAY" and "Boisseau, Jay" would
+      # be counted as two different donors instead of being summed into one.
+      key = [name.upcase, employer.upcase]
+      totals[key] += amount
+      meta[key] ||= {
+        name: name,
+        employer: employer,
+        occupation: occupation,
+        city: city,
+        state: state,
+        by_committee: Hash.new(BigDecimal(0))
+      }
+      meta[key][:by_committee][committee.id] += amount
+
+      committee_totals[committee.id] += amount
+      individual_vs_committee[is_individual ? "individual" : "committee/PAC"] += amount
+    end
+
     committees.each do |committee|
       load_rows(committee, "schedule_a").each do |row|
         next if row["memo_code"] == "X"
@@ -475,25 +692,34 @@ class FecAnalyzer
 
         # Sum every in-scope row, positive or negative — chargebacks/reattributions net
         # against the donor's other gifts rather than being silently discarded.
-        amount = decimal(row["contribution_receipt_amount"])
+        record_donor.call(committee,
+                           name: row["contributor_name"].to_s.strip,
+                           employer: row["contributor_employer"].to_s.strip,
+                           occupation: row["contributor_occupation"].to_s.strip,
+                           city: row["contributor_city"].to_s.strip,
+                           state: row["contributor_state"].to_s.strip,
+                           amount: decimal(row["contribution_receipt_amount"]),
+                           is_individual: row["is_individual"] == "t")
+      end
 
-        name = row["contributor_name"].to_s.strip
-        next if name.empty?
+      # See gotcha 8: fold in raw efile receipts dated strictly after this committee's own
+      # processed schedule_a coverage ends — genuinely new territory, not a re-read of
+      # anything already counted above.
+      efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
+        is_individual = row["entity_type"] == "IND"
+        is_committee = row["entity_type"] == "PAC"
+        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+                    (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
+        next unless donor_type_matches_efile?(is_individual, donor_type)
 
-        key = [name, row["contributor_employer"].to_s.strip]
-        totals[key] += amount
-        meta[key] ||= {
-          name: name,
-          employer: row["contributor_employer"].to_s.strip,
-          occupation: row["contributor_occupation"].to_s.strip,
-          city: row["contributor_city"].to_s.strip,
-          state: row["contributor_state"].to_s.strip,
-          by_committee: Hash.new(BigDecimal(0))
-        }
-        meta[key][:by_committee][committee.id] += amount
-
-        committee_totals[committee.id] += amount
-        individual_vs_committee[row["is_individual"] == "t" ? "individual" : "committee/PAC"] += amount
+        record_donor.call(committee,
+                           name: efile_contributor_name(row),
+                           employer: row["contributor_employer"].to_s.strip,
+                           occupation: row["contributor_occupation"].to_s.strip,
+                           city: row["contributor_city"].to_s.strip,
+                           state: row["contributor_state"].to_s.strip,
+                           amount: decimal(row["contribution_receipt_amount"]),
+                           is_individual: is_individual)
       end
     end
 
@@ -555,6 +781,36 @@ class FecAnalyzer
     committee_totals = Hash.new(BigDecimal(0))
     all_disbursements = []
 
+    record_disbursement = lambda do |committee, row, amount|
+      category = row["category_code_full"].to_s.strip
+      category = "Uncategorized" if category.empty?
+      category_totals[category] += amount
+      category_counts[category] += 1
+
+      payee = row["recipient_name"].to_s.strip
+      unless payee.empty?
+        payee_totals[payee] += amount
+        payee_meta[payee] ||= { city: row["recipient_city"].to_s.strip, state: row["recipient_state"].to_s.strip, category: category }
+      end
+
+      committee_totals[committee.id] += amount
+
+      # Largest-single-transaction view deliberately looks at individual outflows, not
+      # net-per-payee, so it filters to positive line items only (see strategy note 2).
+      next if amount <= 0
+
+      all_disbursements << {
+        committee: committee.id,
+        payee: payee,
+        city: row["recipient_city"].to_s.strip,
+        state: row["recipient_state"].to_s.strip,
+        amount: amount,
+        date: row["disbursement_date"].to_s,
+        description: row["disbursement_description"].to_s.strip,
+        category: category
+      }
+    end
+
     committees.each do |committee|
       load_rows(committee, "schedule_b").each do |row|
         next if row["memo_code"] == "X"
@@ -562,35 +818,14 @@ class FecAnalyzer
 
         # Sum every non-memo row, positive or negative — vendor credits/refunds net
         # against that vendor's other charges rather than being silently discarded.
-        amount = decimal(row["disbursement_amount"])
+        record_disbursement.call(committee, row, decimal(row["disbursement_amount"]))
+      end
 
-        category = row["category_code_full"].to_s.strip
-        category = "Uncategorized" if category.empty?
-        category_totals[category] += amount
-        category_counts[category] += 1
-
-        payee = row["recipient_name"].to_s.strip
-        unless payee.empty?
-          payee_totals[payee] += amount
-          payee_meta[payee] ||= { city: row["recipient_city"].to_s.strip, state: row["recipient_state"].to_s.strip, category: category }
-        end
-
-        committee_totals[committee.id] += amount
-
-        # Largest-single-transaction view deliberately looks at individual outflows, not
-        # net-per-payee, so it filters to positive line items only (see strategy note 2).
-        next if amount <= 0
-
-        all_disbursements << {
-          committee: committee.id,
-          payee: payee,
-          city: row["recipient_city"].to_s.strip,
-          state: row["recipient_state"].to_s.strip,
-          amount: amount,
-          date: row["disbursement_date"].to_s,
-          description: row["disbursement_description"].to_s.strip,
-          category: category
-        }
+      # See gotcha 8: fold in raw efile disbursements dated strictly after this committee's
+      # own processed schedule_b coverage ends. Unlike receipts, Schedule B has no line-number
+      # allowlist to apply — every non-memo row counts here too, same as the processed path.
+      efile_gap_rows(committee, :disbursements, processed_max_date(committee, "schedule_b"), cycle).each do |row|
+        record_disbursement.call(committee, row, decimal(row["disbursement_amount"]))
       end
     end
 
@@ -696,6 +931,22 @@ class FecAnalyzer
             "a separate --download pass)"
     io.puts "=" * 80
     list.each { |r| io.puts "#{r[:name]} [#{r[:committee_id]}]: #{money(r[:total])}" }
+    io.puts
+  end
+
+  def render_efile_gaps(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "!! EFILE COVERAGE WARNING: processed FEC data below is stale for these committees " \
+            "— raw efile submissions (efile-*.csv) extend past the processed schedule_a/schedule_b " \
+            "export's own coverage. The rows in that gap window ARE included in the totals below " \
+            "(see gotcha 8 in this tool's header for how); this banner exists so that inclusion is " \
+            "visible rather than silent:"
+    list.each do |g|
+      io.puts "  #{g[:committee_name]} [#{g[:committee_id]}] #{g[:schedule]}: processed data ends " \
+              "#{g[:processed_through]}, efile data found through #{g[:efile_through]} " \
+              "(#{g[:row_count]} row(s), #{money(g[:total])} added)"
+    end
     io.puts
   end
 
@@ -815,10 +1066,11 @@ if $PROGRAM_NAME == __FILE__
 
   output =
     if options[:format] == "json"
-      # BigDecimal isn't JSON-native; round-trip through Float for portability.
+      # BigDecimal and Date aren't JSON-native; round-trip through Float/ISO-8601 string.
       round_floats = lambda do |obj|
         case obj
         when BigDecimal then obj.to_f
+        when Date then obj.iso8601
         when Hash then obj.transform_values { |v| round_floats.call(v) }
         when Array then obj.map { |v| round_floats.call(v) }
         else obj

@@ -13,7 +13,7 @@ This is mostly an experiment in how far I can get with my AI pals. I'll be docum
 
 # License
 
-The code is licensed under the normal [MIT License](https://mit-license.org)
+The code is licensed under the normal [MIT License](https://mit-license.org). That said, it's largely (but not entirely) machine-generated, so there's that.
 
 The prose outputs are largely (but not entirely) machine generated. To the extent possible, the prose is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 

@@ -2,6 +2,8 @@
 
 This directory contains Ruby scripts for analyzing candidate campaign finance disclosures.
 
+**Run every script here as plain `ruby tooling/<script>.rb ...` from the repo root — never `bundle exec ruby tooling/<script>.rb`.** All three scripts (`analyze-candidate.rb`, `fec-api-client.rb`, `vendor-keyword-scan.rb`) share dependencies pinned in `tooling/Gemfile` (`pdf-reader`, `csv`, `bigdecimal`), not the repo-root `Gemfile`, and each one pins its own `ENV["BUNDLE_GEMFILE"]` to `tooling/Gemfile` at the top of the file so plain `ruby` resolves gems correctly no matter your working directory — no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. Running any of them under `bundle exec` from the repo root sets `BUNDLE_GEMFILE` to the root `Gemfile` *before* the script's own `||=` gets a chance to act, so bundler resolves against the wrong Gemfile: `analyze-candidate.rb` hard-fails with `cannot load such file -- pdf-reader` (it's the only one that needs a gem the root Gemfile doesn't have); `fec-api-client.rb` and `vendor-keyword-scan.rb` don't hard-fail today since `csv`/`bigdecimal` still resolve as system default gems, but they'd hit the same failure the moment either script's dependencies changed, and they already emit Ruby 3.4 deprecation warnings under `bundle exec` that plain `ruby` doesn't. If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/<script>.rb ...`.
+
 ## analyze-candidate.rb
 
 **Purpose:** Analyzes FEC filings and House Ethics disclosures for a candidate, producing donor summaries, spending breakdowns, and optional deep-dive filtered reports.
@@ -53,6 +55,7 @@ ruby tooling/analyze-candidate.rb \
 
 **Notes:**
 
+- Run as plain `ruby` — see the repo-wide note at the top of this file for why `bundle exec` breaks this script specifically (it's the one that hard-fails without the fix, since it needs `pdf-reader`).
 - Read the header comments in `analyze-candidate.rb` before trusting any reported totals — they document data-integrity gotchas (duplicate rows, amendment handling, cycle-matching edge cases, etc.).
 - Multi-cycle support requires historical FEC exports. Drop older CSVs into the same `fec/<committee-id>/` directory; the tool reads `two_year_transaction_period` per row to segregate them.
 - Before writing new analysis tools for a candidate, check whether `analyze-candidate.rb` can be extended with a new flag instead.

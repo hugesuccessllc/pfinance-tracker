@@ -138,6 +138,16 @@ I've got [Visual Studio Code](https://code.visualstudio.com/download) and the [C
 
 **This step assumes Step 1 is already done.** Every prompt below is written to run against data that already exists on disk. It is not supposed to trigger any download, and if a prompt run notices missing data, the correct move is to stop and tell you to go back to Step 1, not to fetch it there and then; the FEC API is a fickle mistress and cannot be trusted to flow flawlessly mid-investigation.
 
+### Running the tool
+
+Every command below invokes `analyze-candidate.rb` as plain `ruby`, run from the repo root:
+
+```bash
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --help
+```
+
+**Do not prefix it with `bundle exec`.** The tool's dependencies (`pdf-reader`, `csv`, `bigdecimal`) live in `tooling/Gemfile`, not the repo-root `Gemfile`, and the script pins its own `BUNDLE_GEMFILE` to `tooling/Gemfile` at the top of the file so a plain `ruby` call resolves gems correctly no matter your working directory — no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. Running it under `bundle exec` from the repo root sets `BUNDLE_GEMFILE` to the root `Gemfile` *before* the script gets a chance to pin its own, and the script can't override an already-set env var — so it fails with `cannot load such file -- pdf-reader` even though everything is installed correctly. If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/analyze-candidate.rb ...`.
+
 ## Default current cycle summary generation
 
 **Prompt v7** (also folds in raw efile data to cover any gap past the processed export's own coverage — see "Prompt history (v7)" below)
@@ -166,7 +176,7 @@ Every `$CANDIDATE` / `$DISTRICT` below is that same substitution. `$CANDIDATE_DI
 
 **Prompt history:** the pilot run of this prompt (TX-11/August-Pfluger) shipped a summary with a "Correction (post-publication review)" section — it took a second pass, prompted by a human asking pointed questions, to catch a couple of data-integrity bugs after the fact. Both are now fixed in [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) and documented in its header comments, not repeated here — see the note below on why. This prompt tells the model to read and reuse that tool up front, specifically so a fresh session doesn't rediscover the same bugs before it can trust its own numbers. A "Correction" section in the output is a sign this prompt or the tool needs another pass, not an acceptable steady state.
 
-**Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed. **Before writing anything new, check whether [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) already exists and covers this candidate's data** (`bundle exec ruby tooling/analyze-candidate.rb --help` shows its interface). It's built to be reused across candidates via `--fec-dir` / `--house-ethics-dir` arguments — extend it in place if a candidate's filings need something it doesn't handle yet, rather than writing a parallel one-off script. **Read that file's header comments in full before trusting or reporting any total** — they hold the specific, tested data-integrity gotchas (duplicate/amended filings, dropped correction rows, lump-sum vendor payments that look unitemized but aren't, and more) as close to the code they explain as possible, so they stay accurate as the tool changes instead of drifting out of sync with a second copy kept here.
+**Tooling requirements:** Any tooling written to perform this analysis must be written in Ruby, using the version pinned in [`.ruby-version`](.ruby-version). Save all tooling artifacts (scripts, Rakefiles, etc.) to the `/tooling` directory. Gems should be managed normally with Bundler and a `Gemfile`, so the repo remains portable and reproducible for anyone with `rbenv` and `bundler` installed. **Before writing anything new, check whether [`/tooling/analyze-candidate.rb`](tooling/analyze-candidate.rb) already exists and covers this candidate's data** (`ruby tooling/analyze-candidate.rb --help` shows its interface — run as plain `ruby`, not `bundle exec ruby`; see "Running the tool" under Step 2 below for why). It's built to be reused across candidates via `--fec-dir` / `--house-ethics-dir` arguments — extend it in place if a candidate's filings need something it doesn't handle yet, rather than writing a parallel one-off script. **Read that file's header comments in full before trusting or reporting any total** — they hold the specific, tested data-integrity gotchas (duplicate/amended filings, dropped correction rows, lump-sum vendor payments that look unitemized but aren't, and more) as close to the code they explain as possible, so they stay accurate as the tool changes instead of drifting out of sync with a second copy kept here.
 
 **Analyze financial disclosure documents for $CANDIDATE ($DISTRICT) and create an executive summary for the $CYCLE election cycle only.**
 
@@ -283,7 +293,7 @@ Neither of these should be run automatically as part of the default summary prom
 
 ## New tool flags for deep dives
 
-Run `bundle exec ruby tooling/analyze-candidate.rb --help` to see the full reference, but the key additions are:
+Run `ruby tooling/analyze-candidate.rb --help` to see the full reference, but the key additions are:
 
 | Flag | Purpose | Example |
 |------|---------|---------|
@@ -296,22 +306,22 @@ Run `bundle exec ruby tooling/analyze-candidate.rb --help` to see the full refer
 
 **Full career history:** Show all donors and spending across every cycle you've collected:
 ```bash
-bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --by-cycle
 ```
 
 **Individual donors >$50k aggregate per cycle:**
 ```bash
-bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type individual --min-amount 50000
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type individual --min-amount 50000
 ```
 
 **All committee/PAC donors (corporate, party, leadership PAC, etc.):**
 ```bash
-bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee
 ```
 
 **Single-cycle deep dive (e.g. 2024-2026):**
 ```bash
-bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --cycle 2026
+ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --cycle 2026
 ```
 
 ## Deep-dive prompt template
@@ -334,7 +344,7 @@ TOOL_FLAGS: The `--by-cycle`, `--cycle`, `--min-amount`, and/or `--donor-type` f
 - Filename: `$CANDIDATE_DIR/deep-dives/$TOPIC.md` (use a kebab-case slug of the topic in place of `$TOPIC`, e.g. `full-history.md`, `corporate-donors.md`, `large-individual-donors.md`)
 - Title: `$DISTRICT: $CANDIDATE — $TOPIC`
 - Structure: Adapt the "Key Donors," "Major Spending," and "Takeaways" sections to fit your topic. For a multi-cycle career deep dive, you might instead have per-cycle subsections, trend analysis, or shift analysis. For a donor-type focus like "all corporate/PAC donors," your structure might emphasize industry patterns, donor relationships, or PAC-to-candidate flows rather than top-10 lists.
-- Methodology & AI Transparency section: **Include the verbatim tool command** you used to generate this report (e.g. `bundle exec ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee`), so readers can reproduce the analysis. Reference the updated header comments in `/tooling/analyze-candidate.rb` regarding cycle integrity and multi-cycle data handling, distinct from the current-cycle summary prompt.
+- Methodology & AI Transparency section: **Include the verbatim tool command** you used to generate this report (e.g. `ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --by-cycle --donor-type committee`), so readers can reproduce the analysis. Reference the updated header comments in `/tooling/analyze-candidate.rb` regarding cycle integrity and multi-cycle data handling, distinct from the current-cycle summary prompt.
 
 **Tone:** Same as the main README — analytical, conversational for a general political audience.
 

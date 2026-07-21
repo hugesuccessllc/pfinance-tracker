@@ -12,11 +12,11 @@
 # transactions; interpretation (which findings are newsworthy, how to phrase them) is left
 # to whoever reads the report, because that judgment doesn't belong in reusable tooling.
 #
-# USAGE
-#   bundle exec ruby analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec \
+# USAGE (run as plain `ruby`, not `bundle exec ruby` — see the note above ENV["BUNDLE_GEMFILE"] below)
+#   ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec \
 #     --house-ethics-dir tx-11/august-pfluger/house-ethics
 #
-#   bundle exec ruby analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --format json --out /tmp/pfluger.json
+#   ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --format json --out /tmp/pfluger.json
 #
 # DATA-MINING STRATEGY (read this before changing the filters below)
 #
@@ -238,6 +238,13 @@
 # tooling/ — pin it explicitly so plain `ruby tooling/analyze-candidate.rb`
 # resolves gems correctly from any working directory, without needing
 # `bundle exec` or a BUNDLE_GEMFILE= prefix.
+#
+# Do NOT run this via `bundle exec ruby tooling/analyze-candidate.rb` from the
+# repo root — `bundle exec` sets BUNDLE_GEMFILE to the repo-root Gemfile
+# *before* this line runs, and `||=` below can't override an already-set env
+# var. That makes bundler resolve against the wrong Gemfile and fail with
+# "cannot load such file -- pdf-reader" even though everything is installed
+# correctly. Plain `ruby` (no `bundle exec`) is the correct invocation.
 ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
 require "bundler/setup"
 

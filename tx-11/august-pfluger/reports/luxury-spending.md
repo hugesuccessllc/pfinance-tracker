@@ -68,7 +68,7 @@ Add it up and the four categories above — fine dining ($264,658.12), retreats 
 
 4. **This is normal, not exceptional, campaign finance practice** — and that's arguably the more unsettling point. Nothing catalogued here appears to violate FEC rules; this is how modern congressional fundraising works across both parties. The "oligarchy" isn't a conspiracy in the shadows — it's an itemized, publicly filed, perfectly legal spreadsheet.
 
-## A few honest caveats
+## Caveats: Yes, it's legal
 
 This is legal campaign spending, filed as required, and none of it is evidence of personal enrichment — FEC rules generally prohibit converting campaign funds to personal use, and the categories above (facility rental, catering, transportation, campaign materials) are the normal accounting language for donor-facing campaign events, not a scandal by themselves. The keyword-matching approach used to build this report (see Methodology below) can both over- and under-catch: a search for "grille" or "bistro" could in principle sweep in an unrelated vendor, and differently spelled or unlisted venues won't show up at all. One such over-catch was found and corrected in this report: an automated match on "man cave" pulled in $20,276.00 of printing charges to a San Antonio print shop that is a different business from the gift shop of a similar name — excluded from the donor-gifts total above. Every dollar figure and vendor name above has been checked against the source spreadsheet at the cited file and line number — readers are encouraged to open those files themselves and check our work.
 

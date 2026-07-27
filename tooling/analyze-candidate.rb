@@ -275,13 +275,14 @@ class FecAnalyzer
 
   Committee = Struct.new(:id, :name, :dir)
 
-  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil)
+  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil, by_state: false)
     @fec_dir = fec_dir
     @top = top
     @cycle = cycle
     @by_cycle = by_cycle
     @min_amount = min_amount && BigDecimal(min_amount.to_s)
     @donor_type = donor_type
+    @by_state = by_state
   end
 
   # Only committees with itemized schedule_a/b data — a committee downloaded via
@@ -316,11 +317,13 @@ class FecAnalyzer
       if @by_cycle
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
           h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
+          h[cyc][:donor_geography] = analyze_donor_geography(cycle: cyc) if @by_state
         end
       else
         result[:cycle] = @cycle.to_s
         result[:donors] = analyze_donors(cycle: @cycle)
         result[:disbursements] = analyze_disbursements(cycle: @cycle)
+        result[:donor_geography] = analyze_donor_geography(cycle: @cycle) if @by_state
       end
       result
     else
@@ -330,8 +333,9 @@ class FecAnalyzer
         transfer_recipients: analyze_transfer_recipients,
         efile_gaps: efile_gaps(cycle: @cycle),
         donors: analyze_donors,
-        disbursements: analyze_disbursements
-      }
+        disbursements: analyze_disbursements,
+        donor_geography: (analyze_donor_geography if @by_state)
+      }.compact
     end
   end
 
@@ -403,6 +407,11 @@ class FecAnalyzer
       io.puts
     end
 
+    if data[:donor_geography]
+      render_donor_geography(io, data[:donor_geography])
+      io.puts
+    end
+
     print_committee_totals(io, "DISBURSEMENTS (itemized, non-memo)", data[:disbursements][:committee_totals])
     io.puts
 
@@ -437,6 +446,37 @@ class FecAnalyzer
     io.puts "By category within these lump payments:"
     cb[:by_category].each_with_index do |row, i|
       io.puts format("%2d. %-45s %12s", i + 1, row[:category][0, 45], money(row[:total]))
+    end
+  end
+
+  def render_donor_geography(io, g)
+    pct = lambda do |part, total|
+      total.zero? ? "n/a" : format("%.1f%%", (part.to_f / total.to_f) * 100)
+    end
+
+    io.puts "=" * 80
+    io.puts "DONOR GEOGRAPHY: TEXAS VS. OUT-OF-STATE (itemized, non-memo, donor rows only)"
+    io.puts "=" * 80
+    io.puts "Total: #{money(g[:total_amount])} across #{g[:total_count]} contributions"
+    io.puts "  Texas:        #{money(g[:tx_amount])} (#{pct.call(g[:tx_amount], g[:total_amount])} of $) | " \
+            "#{g[:tx_count]} contributions (#{pct.call(g[:tx_count], g[:total_count])} of n)"
+    io.puts "  Out-of-state: #{money(g[:out_of_state_amount])} (#{pct.call(g[:out_of_state_amount], g[:total_amount])} of $) | " \
+            "#{g[:out_of_state_count]} contributions (#{pct.call(g[:out_of_state_count], g[:total_count])} of n)"
+    if g[:unknown_count] > 0
+      io.puts "  Unknown/blank state: #{money(g[:unknown_amount])} | #{g[:unknown_count]} contributions (excluded from the two percentages above)"
+    end
+    io.puts
+
+    print_table(io, "RECEIPTS BY STATE (all committees combined)", g[:by_state]) do |row, i|
+      format("%2d. %-4s %14s  (n=%d)", i + 1, row[:state], money(row[:amount]), row[:count])
+    end
+    io.puts
+
+    print_table(io, "TOP OUT-OF-STATE DONORS (deduped by name+employer)", g[:top_out_of_state]) do |row, i|
+      committees_str = row[:by_committee].map { |cid, amt| "#{cid}: #{money(amt)}" }.join(", ")
+      format("%2d. %-35s %12s (n=%d) | employer: %-30s occ: %-20s %s, %s | %s",
+             i + 1, row[:name][0, 35], money(row[:total]), row[:count], row[:employer][0, 30], row[:occupation][0, 20],
+             row[:city], row[:state], committees_str)
     end
   end
 
@@ -748,6 +788,103 @@ class FecAnalyzer
     result
   end
 
+  # Same DONOR_LABELS/memo/cycle/donor-type scoping as analyze_donors (see its comments and
+  # gotchas 1, 3, 7, 8 above) so a geography subtotal from this method is directly comparable
+  # to, and never double-counts against, analyze_donors' own totals. Tracked separately (not
+  # folded into analyze_donors) because this needs a per-row CONTRIBUTION COUNT, not just a
+  # dollar total — analyze_donors dedupes by name+employer and never counts rows.
+  #
+  # "Out-of-state" means contributor_state != "TX", exactly as filed. Blank/missing state
+  # (seen on some older or PAC-sourced rows) is bucketed separately as unknown rather than
+  # silently folded into either side, so it's visible instead of quietly skewing a percentage.
+  def analyze_donor_geography(cycle: @cycle, donor_type: @donor_type)
+    state_totals = Hash.new { |h, k| h[k] = { amount: BigDecimal(0), count: 0 } }
+    out_of_state_totals = Hash.new(BigDecimal(0))
+    out_of_state_counts = Hash.new(0)
+    out_of_state_meta = {}
+
+    record = lambda do |committee, name:, employer:, occupation:, city:, state:, amount:, is_individual:|
+      st = state.to_s.strip.upcase
+      st = "UNKNOWN" if st.empty?
+      state_totals[st][:amount] += amount
+      state_totals[st][:count] += 1
+
+      next if st == "TX" || st == "UNKNOWN" || name.empty?
+
+      key = [name.upcase, employer.upcase]
+      out_of_state_totals[key] += amount
+      out_of_state_counts[key] += 1
+      out_of_state_meta[key] ||= {
+        name: name, employer: employer, occupation: occupation, city: city, state: st,
+        by_committee: Hash.new(BigDecimal(0))
+      }
+      out_of_state_meta[key][:by_committee][committee.id] += amount
+    end
+
+    committees.each do |committee|
+      load_rows(committee, "schedule_a").each do |row|
+        next if row["memo_code"] == "X"
+        next unless DONOR_LABELS.include?(row["line_number_label"].to_s.strip)
+        next unless cycle_matches?(row, cycle)
+        next unless donor_type_matches?(row, donor_type)
+
+        record.call(committee,
+                     name: row["contributor_name"].to_s.strip,
+                     employer: row["contributor_employer"].to_s.strip,
+                     occupation: row["contributor_occupation"].to_s.strip,
+                     city: row["contributor_city"].to_s.strip,
+                     state: row["contributor_state"].to_s.strip,
+                     amount: decimal(row["contribution_receipt_amount"]),
+                     is_individual: row["is_individual"] == "t")
+      end
+
+      efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
+        is_individual = row["entity_type"] == "IND"
+        is_committee = row["entity_type"] == "PAC"
+        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+                    (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
+        next unless donor_type_matches_efile?(is_individual, donor_type)
+
+        record.call(committee,
+                     name: efile_contributor_name(row),
+                     employer: row["contributor_employer"].to_s.strip,
+                     occupation: row["contributor_occupation"].to_s.strip,
+                     city: row["contributor_city"].to_s.strip,
+                     state: row["contributor_state"].to_s.strip,
+                     amount: decimal(row["contribution_receipt_amount"]),
+                     is_individual: is_individual)
+      end
+    end
+
+    total_amount = state_totals.values.sum { |v| v[:amount] }
+    total_count = state_totals.values.sum { |v| v[:count] }
+    tx = state_totals["TX"] || { amount: BigDecimal(0), count: 0 }
+    unknown = state_totals["UNKNOWN"] || { amount: BigDecimal(0), count: 0 }
+    out_amount = total_amount - tx[:amount] - unknown[:amount]
+    out_count = total_count - tx[:count] - unknown[:count]
+
+    by_state = state_totals.reject { |k, _| k == "UNKNOWN" }
+                            .sort_by { |_k, v| -v[:amount] }
+                            .map { |st, v| { state: st, amount: v[:amount], count: v[:count] } }
+
+    top_out_of_state = out_of_state_totals.sort_by { |_k, v| -v }
+                                           .first(@top)
+                                           .map { |key, total| out_of_state_meta[key].merge(total: total, count: out_of_state_counts[key]) }
+
+    {
+      total_amount: total_amount,
+      total_count: total_count,
+      tx_amount: tx[:amount],
+      tx_count: tx[:count],
+      out_of_state_amount: out_amount,
+      out_of_state_count: out_count,
+      unknown_amount: unknown[:amount],
+      unknown_count: unknown[:count],
+      by_state: by_state,
+      top_out_of_state: top_out_of_state
+    }
+  end
+
   # Schedule B already carries a recipient_committee_id field whenever the payee is
   # itself a political committee (e.g. a party committee, another candidate's
   # committee, a PAC) — no extra API call needed to see this, since it's part of
@@ -1049,6 +1186,7 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--by-cycle", "Group donor/disbursement tables into one section per 2-year cycle instead of one combined total. Intended for multi-cycle/full-history data collected into the same fec/<committee-id>/ directories.") { options[:by_cycle] = true }
     opts.on("--min-amount N", Float, "In addition to the normal --top table, report ALL donors (subject to any active --cycle/--donor-type filter) whose aggregate contribution total is >= N. E.g. --min-amount 50000.") { |v| options[:min_amount] = v }
     opts.on("--donor-type TYPE", %w[individual committee], "Restrict donor analysis to individual donors or committee/PAC donors (is_individual field). No structured 'corporate' field exists in this data — see README.") { |v| options[:donor_type] = v }
+    opts.on("--by-state", "Add a DONOR GEOGRAPHY section: Texas vs. out-of-state receipts, by dollar amount AND contribution count, plus a per-state breakdown and top out-of-state donors.") { options[:by_state] = true }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -1060,7 +1198,7 @@ if $PROGRAM_NAME == __FILE__
 
   fec = FecAnalyzer.new(options[:fec_dir], top: options[:top], cycle: options[:cycle],
                          by_cycle: options[:by_cycle], min_amount: options[:min_amount],
-                         donor_type: options[:donor_type])
+                         donor_type: options[:donor_type], by_state: options[:by_state])
   fec_data = fec.run
 
   house_ethics_data = nil

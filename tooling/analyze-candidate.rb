@@ -273,9 +273,34 @@ class FecAnalyzer
   EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
   EFILE_COMMITTEE_LINES = %w[11C].freeze
 
+  # For refund cap-checking ONLY (see analyze_refunds): "Transfers from authorized
+  # committees" is excluded from DONOR_LABELS everywhere else (gotcha 3) because it's mostly
+  # JFC-pooled money, not a direct donor relationship. But gotcha 7 established that this same
+  # line also itemizes JFC-earmarked individual/PAC contributions under the real donor's name
+  # — and earmarked money counts against that donor's per-election limit exactly like a direct
+  # check does. Excluding it here would silently miss donors who maxed out through a JFC
+  # rather than directly, so it's added to its own allowlist scoped to this one method.
+  CAP_CHECK_LABELS = (DONOR_LABELS + ["Transfers from authorized committees"]).freeze
+  EFILE_CAP_CHECK_INDIVIDUAL_LINES = (EFILE_INDIVIDUAL_LINES + %w[12]).freeze
+  EFILE_CAP_CHECK_COMMITTEE_LINES = (EFILE_COMMITTEE_LINES + %w[12]).freeze
+
+  # Schedule B's own refund line, in both its processed-export text form and its raw-efile
+  # numeric form (line 20a/b/c on a standard Form 3 filer, 28a/b/c on some Form 3X filers —
+  # both codings observed across Pfluger's own committees, see analyze_refunds).
+  REFUND_LABEL_PATTERN = /\ARefunds of Contributions/i.freeze
+  EFILE_REFUND_LINES = %w[20A 20B 20C 28A 28B 28C].freeze
+
+  # 2025-2026 cycle FEC per-election contribution limits (not derivable from the CSVs
+  # themselves — these are the published limits as of this tool's writing; update if a
+  # future cycle's limits change). Individual → candidate committee: $3,500 per election
+  # (primary and general count separately). Multicandidate (PAC) → candidate committee:
+  # $5,000 per election, unchanged since 2015.
+  INDIVIDUAL_PER_ELECTION_LIMIT = BigDecimal("3500")
+  MULTICANDIDATE_PAC_PER_ELECTION_LIMIT = BigDecimal("5000")
+
   Committee = Struct.new(:id, :name, :dir)
 
-  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil, by_state: false)
+  def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil, by_state: false, refunds: false)
     @fec_dir = fec_dir
     @top = top
     @cycle = cycle
@@ -283,6 +308,7 @@ class FecAnalyzer
     @min_amount = min_amount && BigDecimal(min_amount.to_s)
     @donor_type = donor_type
     @by_state = by_state
+    @refunds = refunds
   end
 
   # Only committees with itemized schedule_a/b data — a committee downloaded via
@@ -318,12 +344,14 @@ class FecAnalyzer
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
           h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
           h[cyc][:donor_geography] = analyze_donor_geography(cycle: cyc) if @by_state
+          h[cyc][:refunds] = analyze_refunds(cycle: cyc) if @refunds
         end
       else
         result[:cycle] = @cycle.to_s
         result[:donors] = analyze_donors(cycle: @cycle)
         result[:disbursements] = analyze_disbursements(cycle: @cycle)
         result[:donor_geography] = analyze_donor_geography(cycle: @cycle) if @by_state
+        result[:refunds] = analyze_refunds(cycle: @cycle) if @refunds
       end
       result
     else
@@ -334,7 +362,8 @@ class FecAnalyzer
         efile_gaps: efile_gaps(cycle: @cycle),
         donors: analyze_donors,
         disbursements: analyze_disbursements,
-        donor_geography: (analyze_donor_geography if @by_state)
+        donor_geography: (analyze_donor_geography if @by_state),
+        refunds: (analyze_refunds if @refunds)
       }.compact
     end
   end
@@ -412,6 +441,11 @@ class FecAnalyzer
       io.puts
     end
 
+    if data[:refunds]
+      render_refunds(io, data[:refunds])
+      io.puts
+    end
+
     print_committee_totals(io, "DISBURSEMENTS (itemized, non-memo)", data[:disbursements][:committee_totals])
     io.puts
 
@@ -478,6 +512,39 @@ class FecAnalyzer
              i + 1, row[:name][0, 35], money(row[:total]), row[:count], row[:employer][0, 30], row[:occupation][0, 20],
              row[:city], row[:state], committees_str)
     end
+  end
+
+  def render_refunds(io, r)
+    io.puts "=" * 80
+    io.puts "REFUNDED CONTRIBUTIONS (Schedule B refund lines only)"
+    io.puts "=" * 80
+    io.puts "#{r[:donor_count]} donor(s) net-refunded a positive amount, totaling #{money(r[:total_refunded])}."
+    io.puts "Donor identity is matched to Schedule A contribution rows by NAME ONLY (Schedule B refund " \
+            "rows carry no employer field to disambiguate same-named donors) — treat employer/occupation/" \
+            "cap-check numbers below as best-effort, not exact, for common names. Rows flagged " \
+            "[NO MATCHING CONTRIBUTION ROW] had no Schedule A row found under that name at all (cycle- or " \
+            "committee-scoping mismatch, or a refund to a non-donor payee) — cap status for those is unknown, " \
+            "not confirmed-negative."
+    io.puts
+
+    print_table(io, "AT OR OVER THE PER-ELECTION LIMIT (individual #{money(INDIVIDUAL_PER_ELECTION_LIMIT)} / " \
+                     "multicandidate committee #{money(MULTICANDIDATE_PAC_PER_ELECTION_LIMIT)})", r[:at_cap]) do |row, i|
+      refund_donor_line(row, i)
+    end
+    io.puts
+
+    print_table(io, "REFUNDED FOR OTHER REASONS (no election's aggregate-to-date reached the limit)", r[:other_reasons]) do |row, i|
+      refund_donor_line(row, i)
+    end
+  end
+
+  def refund_donor_line(d, i)
+    elections = d[:at_cap_elections].map { |e| "#{e[:election]}: #{money(e[:aggregate_ytd])}" }.join(", ")
+    match_flag = d[:has_contribution_match] ? "" : "  [NO MATCHING CONTRIBUTION ROW]"
+    format("%3d. %-30s refunded %10s | total contributed %10s | employer: %-25s occ: %-18s %s, %s%s%s",
+           i + 1, d[:name][0, 30], money(d[:total_refunded]), money(d[:total_contributed]),
+           d[:employer][0, 25], d[:occupation][0, 18], d[:city], d[:state],
+           elections.empty? ? "" : " | at-cap: #{elections}", match_flag)
   end
 
   def donor_row_line(row, i)
@@ -607,11 +674,25 @@ class FecAnalyzer
       txn_id.empty? ? group : [group.max_by { |(_, row)| row["load_timestamp"].to_s }]
     end
 
+    # Only collapse a natural-key group when it spans MORE THAN ONE file_number — the
+    # signature of a genuine original+amendment pair, as in the VOTE SAVE AMERICA case
+    # gotcha 8 documents (transaction_ids SA11AI.5956/SA11C.6056, file_numbers 1992872 and
+    # 1998635, two different filing dates). When every row in a natural-key group instead
+    # shares the SAME file_number, they were filed together in one submission, not
+    # resubmitted as a correction — collapsing them is wrong, not safe. This surfaced on
+    # Pfluger's own refund data (analyze_refunds): 12 distinct, distinctly-transaction-ID'd
+    # refunds to "GOMEZ" filed together under file_number 1995835 include five separate
+    # $35.00 rows and two separate $0.26 rows (a plausible multi-month recurring-donation
+    # refund batch) — the old single-file_number-blind collapse kept only one of each,
+    # undercounting that donor's true refund total by $140.26.
     natural_key = lambda do |(d, row)|
       counterparty = shape == :receipts ? efile_contributor_name(row) : row["recipient_name"].to_s.strip
       [d, row[amount_field].to_s.strip, counterparty]
     end
-    pass2 = pass1.group_by(&natural_key).map { |_, group| group.max_by { |(_, row)| row["load_timestamp"].to_s } }
+    pass2 = pass1.group_by(&natural_key).flat_map do |_, group|
+      file_numbers = group.map { |(_, row)| row["file_number"].to_s }.uniq
+      file_numbers.size > 1 ? [group.max_by { |(_, row)| row["load_timestamp"].to_s }] : group
+    end
 
     pass2.map { |(_, row)| row }
   end
@@ -882,6 +963,156 @@ class FecAnalyzer
       unknown_count: unknown[:count],
       by_state: by_state,
       top_out_of_state: top_out_of_state
+    }
+  end
+
+  # "Which donors got a refund, and was it because they hit the per-election contribution
+  # limit, or something else (declined/duplicate charge, ineligible source, plain donor
+  # request)?" Refunds live on Schedule B as their own line (line_number_label starting
+  # "Refunds of Contributions..." on processed exports; numeric 20A/20B/20C/28A/28B/28C on
+  # raw efile — both codings are present across Pfluger's own committees, see
+  # REFUND_LABEL_PATTERN/EFILE_REFUND_LINES). The recipient_name on those rows is the donor
+  # being refunded, but Schedule B carries no employer/occupation/aggregate-to-date for
+  # them — that only lives on the donor's own Schedule A receipt rows, so this method
+  # builds a donor profile from Schedule A first, then joins refund rows onto it by
+  # upcased name (Schedule B has no employer field to disambiguate same-named donors, so
+  # this join is best-effort, not exact, for common names — see render_refunds).
+  #
+  # Cap detection uses contributor_aggregate_ytd, FEC's own running per-donor total for a
+  # given election (the same number a campaign treasurer watches to know when a refund is
+  # legally required), taking the MAX seen per election_type (e.g. P2026, G2026) rather than
+  # summing rows, since aggregate_ytd is already a running total — summing it across rows
+  # would double count. A donor is flagged "at or over the limit" if that max, for any single
+  # election, meets or exceeds the applicable per-election limit (individual vs.
+  # multicandidate committee — see INDIVIDUAL_PER_ELECTION_LIMIT /
+  # MULTICANDIDATE_PAC_PER_ELECTION_LIMIT).
+  def analyze_refunds(cycle: @cycle)
+    donor_profile = Hash.new do |h, k|
+      h[k] = { name: nil, employer: "", occupation: "", city: "", state: "", is_individual: nil,
+               total_contributed: BigDecimal(0), by_election: Hash.new(BigDecimal(0)) }
+    end
+
+    record_contribution = lambda do |name:, employer:, occupation:, city:, state:, amount:, is_individual:, election_type:, aggregate_ytd:|
+      name = name.to_s.strip
+      next if name.empty?
+      p = donor_profile[name.upcase]
+      p[:name] ||= name
+      p[:employer] = employer.to_s.strip unless employer.to_s.strip.empty?
+      p[:occupation] = occupation.to_s.strip unless occupation.to_s.strip.empty?
+      p[:city] = city.to_s.strip unless city.to_s.strip.empty?
+      p[:state] = state.to_s.strip unless state.to_s.strip.empty?
+      p[:is_individual] = is_individual
+      p[:total_contributed] += amount
+      et = election_type.to_s.strip
+      next if et.empty?
+      p[:by_election][et] = aggregate_ytd if aggregate_ytd > p[:by_election][et]
+    end
+
+    committees.each do |committee|
+      load_rows(committee, "schedule_a").each do |row|
+        next if row["memo_code"] == "X"
+        next unless CAP_CHECK_LABELS.include?(row["line_number_label"].to_s.strip)
+        next unless cycle_matches?(row, cycle)
+        record_contribution.call(
+          name: row["contributor_name"], employer: row["contributor_employer"],
+          occupation: row["contributor_occupation"], city: row["contributor_city"], state: row["contributor_state"],
+          amount: decimal(row["contribution_receipt_amount"]), is_individual: row["is_individual"] == "t",
+          election_type: row["election_type"], aggregate_ytd: decimal(row["contributor_aggregate_ytd"])
+        )
+      end
+
+      # See gotcha 8: fold in raw efile receipts past this committee's own processed
+      # schedule_a coverage, same gap-filling logic analyze_donors uses.
+      #
+      # entity_type "ORG" (not just "IND") also shows up on the individual line (11AI) —
+      # LLCs, law firms, and tribal governments that haven't elected corporate tax
+      # treatment are subject to the same per-election limit as an individual, and FEC
+      # filers code them this way. Surfaced by Pfluger Victory Fund's own efile data
+      # (C00753913): "MILES BOLDRICK STATEWIDE MINERALS CO" gave $12,000 on 2026-04-28
+      # under line 11AI with entity_type ORG — treating ORG as non-individual here would
+      # have hidden that contribution from this cap check entirely, which is exactly what
+      # happened before this comment was added (the $12,000 refund of that same money one
+      # month later showed up with no matching contribution row at all).
+      efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
+        is_individual = %w[IND ORG].include?(row["entity_type"])
+        is_committee = row["entity_type"] == "PAC"
+        next unless (EFILE_CAP_CHECK_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+                    (EFILE_CAP_CHECK_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
+        # Raw efile Schedule A has no election_type column at all (that's a processed-
+        # export-only field) — its equivalent is "pgo" (e.g. "P2026"/"G2026"), and even
+        # that is blank on some rows (487 of ~6,200 here), including the Boldrick row
+        # above. Falling back to a shared "unknown election" bucket rather than skipping
+        # the row entirely (as an empty election_type key would) keeps the dollar amount
+        # visible to the cap check instead of silently vanishing — see the entity_type
+        # comment above for why this specific row needed to be counted at all.
+        election_key = row["pgo"].to_s.strip
+        election_key = "UNKNOWN (efile, no pgo)" if election_key.empty?
+        record_contribution.call(
+          name: efile_contributor_name(row), employer: row["contributor_employer"],
+          occupation: row["contributor_occupation"], city: row["contributor_city"], state: row["contributor_state"],
+          amount: decimal(row["contribution_receipt_amount"]), is_individual: is_individual,
+          election_type: election_key, aggregate_ytd: decimal(row["contributor_aggregate_ytd"])
+        )
+      end
+    end
+
+    refunds = Hash.new do |h, k|
+      h[k] = { name: nil, city: "", state: "", total: BigDecimal(0) }
+    end
+
+    record_refund = lambda do |name:, city:, state:, amount:|
+      name = name.to_s.strip
+      next if name.empty?
+      r = refunds[name.upcase]
+      r[:name] ||= name
+      r[:city] = city.to_s.strip unless city.to_s.strip.empty?
+      r[:state] = state.to_s.strip unless state.to_s.strip.empty?
+      r[:total] += amount
+    end
+
+    committees.each do |committee|
+      load_rows(committee, "schedule_b").each do |row|
+        next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
+        next unless row["line_number_label"].to_s.strip =~ REFUND_LABEL_PATTERN
+        record_refund.call(name: row["recipient_name"], city: row["recipient_city"], state: row["recipient_state"],
+                            amount: decimal(row["disbursement_amount"]))
+      end
+
+      efile_gap_rows(committee, :disbursements, processed_max_date(committee, "schedule_b"), cycle).each do |row|
+        next unless EFILE_REFUND_LINES.include?(row["line_number"].to_s.strip)
+        record_refund.call(name: row["recipient_name"], city: row["recipient_city"], state: row["recipient_state"],
+                            amount: decimal(row["disbursement_amount"]))
+      end
+    end
+
+    results = refunds.values.select { |r| r[:total] > 0 }.map do |r|
+      key = r[:name].upcase
+      has_match = donor_profile.key?(key)
+      profile = donor_profile[key]
+      limit = profile[:is_individual] == false ? MULTICANDIDATE_PAC_PER_ELECTION_LIMIT : INDIVIDUAL_PER_ELECTION_LIMIT
+      at_cap_elections = profile[:by_election].select { |_et, aggregate| aggregate >= limit }
+
+      {
+        name: r[:name],
+        city: r[:city].empty? ? profile[:city] : r[:city],
+        state: r[:state].empty? ? profile[:state] : r[:state],
+        employer: profile[:employer],
+        occupation: profile[:occupation],
+        is_individual: profile[:is_individual],
+        has_contribution_match: has_match,
+        total_refunded: r[:total],
+        total_contributed: profile[:total_contributed],
+        at_cap: !at_cap_elections.empty?,
+        at_cap_elections: at_cap_elections.map { |et, aggregate| { election: et, aggregate_ytd: aggregate } }
+      }
+    end
+
+    {
+      total_refunded: results.sum { |r| r[:total_refunded] },
+      donor_count: results.size,
+      at_cap: results.select { |r| r[:at_cap] }.sort_by { |r| -r[:total_refunded] },
+      other_reasons: results.reject { |r| r[:at_cap] }.sort_by { |r| -r[:total_refunded] }
     }
   end
 
@@ -1187,6 +1418,7 @@ if $PROGRAM_NAME == __FILE__
     opts.on("--min-amount N", Float, "In addition to the normal --top table, report ALL donors (subject to any active --cycle/--donor-type filter) whose aggregate contribution total is >= N. E.g. --min-amount 50000.") { |v| options[:min_amount] = v }
     opts.on("--donor-type TYPE", %w[individual committee], "Restrict donor analysis to individual donors or committee/PAC donors (is_individual field). No structured 'corporate' field exists in this data — see README.") { |v| options[:donor_type] = v }
     opts.on("--by-state", "Add a DONOR GEOGRAPHY section: Texas vs. out-of-state receipts, by dollar amount AND contribution count, plus a per-state breakdown and top out-of-state donors.") { options[:by_state] = true }
+    opts.on("--refunds", "Add a REFUNDED CONTRIBUTIONS section: every donor refunded via Schedule B's refund line, split into 'likely hit the per-election contribution limit' (per FEC's own contributor_aggregate_ytd field) vs. 'refunded for other reasons.'") { options[:refunds] = true }
     opts.on("-h", "--help", "Show this help") do
       puts opts
       exit
@@ -1198,7 +1430,8 @@ if $PROGRAM_NAME == __FILE__
 
   fec = FecAnalyzer.new(options[:fec_dir], top: options[:top], cycle: options[:cycle],
                          by_cycle: options[:by_cycle], min_amount: options[:min_amount],
-                         donor_type: options[:donor_type], by_state: options[:by_state])
+                         donor_type: options[:donor_type], by_state: options[:by_state],
+                         refunds: options[:refunds])
   fec_data = fec.run
 
   house_ethics_data = nil

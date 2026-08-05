@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec --house-ethics-dir tx-11/august-pfluger/house-ethics --cycle 2026)",
+      "Bash(tee /tmp/pfluger_analysis_output.txt)"
     ],
     "deny": [
       "Bash(git commit *)",

@@ -63,6 +63,14 @@
 #   These rows are marked with an "[efile, not yet in processed export]" tag in text output
 #   (or "source": "efile-gap" in JSON) so a reader can tell which numbers come from the
 #   normal processed export versus the raw, not-yet-reconciled filing data.
+#
+#   BUG FIXED (found building the 2026-automotive report): --cycle combined with
+#   --include-efile-gap used to silently discard every efile-gap row. The shared row-scan
+#   cycle filter compared row["two_year_transaction_period"] against --cycle, but the raw
+#   disbursement-shaped efile-*.csv has no such column at all (only schedule_b does) — so an
+#   absent field never matched, and the whole gap window vanished with no warning. Fixed to
+#   approximate by calendar year for rows missing that column, matching how
+#   analyze-candidate.rb and donor-keyword-scan.rb already handle the same gap.
 
 ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
 require "bundler/setup"
@@ -137,8 +145,23 @@ end
 
 def scan_rows(csv_enum, options, matches, cid, committee_dir_label, source:, min_date_exclusive: nil)
   while (row = csv_enum.next_row)
-    next if options[:cycle] && row["two_year_transaction_period"].to_s.strip != options[:cycle].to_s
     date = row["disbursement_date"].to_s
+    if options[:cycle]
+      cyc = row["two_year_transaction_period"].to_s.strip
+      if cyc.empty?
+        # Raw disbursement-shaped efile-*.csv rows (source: "efile-gap") carry no
+        # two_year_transaction_period column at all — unlike schedule_b, which always has
+        # one. Checking it with a plain != here (as this used to) silently discarded EVERY
+        # efile-gap row whenever --cycle was combined with --include-efile-gap, because an
+        # absent field never equals the requested cycle. Approximate by calendar year
+        # instead, same as analyze-candidate.rb's own efile-gap handling and
+        # donor-keyword-scan.rb's sibling logic for receipts.
+        year = date[0, 4].to_i
+        next unless year == options[:cycle].to_i || year == options[:cycle].to_i - 1
+      else
+        next if cyc != options[:cycle].to_s
+      end
+    end
     next if min_date_exclusive && date <= min_date_exclusive
 
     haystack = [row["recipient_name"], row["disbursement_description"], row["memo_text"]].join(" ").downcase

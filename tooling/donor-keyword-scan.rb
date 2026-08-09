@@ -38,21 +38,25 @@
 #     a participating committee shows up, and which ALSO happens to carry memo-itemized,
 #     already-counted-elsewhere earmark attribution rows (gotcha 7) that would double-count
 #     against the JFC's own direct receipts if summed here too. Matching analyze-candidate.rb's
-#     scoping exactly means a keyword-matched subtotal from this tool is directly comparable to,
-#     and never double-counts against, that tool's own Key Donors figures.
-#   - memo_code == "X" rows are excluded (redundant rollup lines, not new money — see
-#     analyze-candidate.rb gotcha 1).
+#     scoping keeps this tool's totals reconcilable against that one's.
+#   - memo_code == "X" rows are skipped for the same reason as analyze-candidate.rb gotcha 1:
+#     they're informational sub-items of a total already counted elsewhere (most often the
+#     JFC-earmark itemization under gotcha 7), so counting them here would double-count.
 #
 # EFILE GAP (--include-efile-gap)
-#   Same rationale and safety property as vendor-keyword-scan.rb's version: fec.gov's
-#   schedule_a-*.csv is a "processed" export that can lag behind what a committee has actually
-#   filed. This scans ONLY the raw receipts-shaped efile-*.csv rows (identified by having a
-#   contribution_receipt_amount column, as opposed to the disbursements-shaped efile) dated
-#   STRICTLY AFTER schedule_a's own latest contribution_receipt_date for that committee — a
-#   window schedule_a provably has zero rows in, so there is no overlap to double-count.
+#   fec.gov's schedule_a-*.csv is a "processed" export that can lag a campaign's actual raw
+#   filings by months, the same way schedule_b does for disbursements (see
+#   vendor-keyword-scan.rb's header for the observed Pfluger gap). --include-efile-gap finds
+#   each committee's own schedule_a latest contribution_receipt_date and scans ONLY the
+#   receipts-shaped efile-*.csv rows (identified by a contribution_receipt_amount column, as
+#   opposed to the disbursement-shaped efile) dated STRICTLY AFTER that date — a window
+#   schedule_a provably has zero rows in, so there's no overlap to double-count.
 #
-#   Two amendment-dedup passes, matching analyze-candidate.rb's efile_gap_rows(:receipts)
-#   exactly (see that method's comments for the concrete cases that motivated each):
+#   Raw efile receipts rows need MORE reconciliation than disbursement rows do, because a
+#   single committee filing can appear multiple times in efile as amendments are processed
+#   (schedule_a, by contrast, already resolves amendments upstream). Gap rows go through two
+#   dedup passes before being matched exactly (see that method's comments for the concrete
+#   cases that motivated each):
 #     1. By transaction_id (keep the latest load_timestamp per id).
 #     2. By natural key (date + amount + contributor name) — catches an amendment that
 #        reclassifies a row under a NEW transaction_id (e.g. refiled from an individual line
@@ -62,9 +66,17 @@
 #   EFILE_INDIVIDUAL_LINES/EFILE_COMMITTEE_LINES — and matched against entity_type (IND/PAC).
 #   Matches sourced this way are tagged "[efile, not yet in processed export]" in text output
 #   (or "source": "efile-gap" in JSON).
+#
+# TESTING: everything below the CLI guard (`if $PROGRAM_NAME == __FILE__`) is the
+# executable entry point; `require`-ing this file (as spec/donor_keyword_scan_spec.rb
+# does) loads only the DonorMatch struct and the helper methods, with no side effects, so
+# they can be exercised directly against fixture data.
+#
+# DonorMatch (not just "Match") because vendor-keyword-scan.rb's sibling struct needs a
+# distinct top-level constant name too — see that file's header for why.
 
-ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
-require "bundler/setup"
+require_relative "lib/bootstrap"
+require_relative "lib/fec_committees"
 
 require "csv"
 require "optparse"
@@ -79,46 +91,10 @@ DONOR_LABELS = [
 EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
 EFILE_COMMITTEE_LINES = %w[11C].freeze
 
-options = { fec_dir: nil, groups: {}, cycle: nil, format: "text", out: nil, include_efile_gap: false }
-
-OptionParser.new do |opts|
-  opts.banner = "Usage: donor-keyword-scan.rb --fec-dir DIR (--group \"Name=kw1,kw2\" | --keywords kw1,kw2) [options]"
-  opts.on("--fec-dir DIR", "Candidate's fec/ directory") { |v| options[:fec_dir] = v }
-  opts.on("--group SPEC", "Named keyword group as Name=kw1,kw2,... (repeatable)") do |v|
-    name, kws = v.split("=", 2)
-    raise OptionParser::InvalidArgument, v if name.nil? || kws.nil?
-    options[:groups][name] = kws.split(",").map(&:strip)
-  end
-  opts.on("--keywords LIST", "Comma-separated keywords, grouped under 'Matches'") do |v|
-    options[:groups]["Matches"] = v.split(",").map(&:strip)
-  end
-  opts.on("--cycle YYYY", "Scope to a single two_year_transaction_period (processed rows only; efile gap rows are approximated by calendar year)") { |v| options[:cycle] = v }
-  opts.on("--include-efile-gap", "Also scan raw receipts-shaped efile-*.csv rows dated after schedule_a's latest date (see header comment)") do
-    options[:include_efile_gap] = true
-  end
-  opts.on("--format FORMAT", "text (default) or json") { |v| options[:format] = v }
-  opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
-  opts.on("-h", "--help", "Show this help") do
-    puts opts
-    exit
-  end
-end.parse!
-
-if options[:fec_dir].nil? || options[:groups].empty?
-  warn "Error: --fec-dir and at least one of --group/--keywords are required. See --help."
-  exit 1
-end
-
-Match = Struct.new(:group, :keyword, :committee_id, :committee_name, :file, :line, :date,
-                    :contributor_name, :contributor_employer, :contributor_occupation,
-                    :contributor_city, :contributor_state, :amount, :is_individual,
-                    :transaction_id, :source, keyword_init: true)
-
-def committees(fec_dir)
-  Dir.children(fec_dir)
-     .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(fec_dir, d)) }
-     .sort
-end
+DonorMatch = Struct.new(:group, :keyword, :committee_id, :committee_name, :file, :line, :date,
+                         :contributor_name, :contributor_employer, :contributor_occupation,
+                         :contributor_city, :contributor_state, :amount, :is_individual,
+                         :transaction_id, :source, keyword_init: true)
 
 def receipt_efile_paths(committee_dir)
   Dir.glob(File.join(committee_dir, "efile-*.csv")).select do |path|
@@ -161,11 +137,7 @@ def efile_contributor_name(row)
   "#{parts[0]}, #{parts[1..].join(' ')}"
 end
 
-matches = []
-
-committees(options[:fec_dir]).each do |cid|
-  committee_dir = File.join(options[:fec_dir], cid)
-
+def scan_schedule_a(committee_dir, cid, options, matches)
   Dir.glob(File.join(committee_dir, "schedule_a-*.csv")).each do |path|
     File.open(path) do |f|
       csv = CSV.new(f, headers: true)
@@ -179,7 +151,7 @@ committees(options[:fec_dir]).each do |cid|
         group_name, hit = matched_group(options, haystack)
         next unless group_name
 
-        matches << Match.new(
+        matches << DonorMatch.new(
           group: group_name, keyword: hit, committee_id: cid, committee_name: row["committee_name"],
           file: path, line: csv.lineno, date: row["contribution_receipt_date"],
           contributor_name: row["contributor_name"], contributor_employer: row["contributor_employer"],
@@ -190,11 +162,11 @@ committees(options[:fec_dir]).each do |cid|
       end
     end
   end
+end
 
-  next unless options[:include_efile_gap]
-
+def scan_efile_gap(committee_dir, cid, options, matches)
   ceiling_date = parse_date(schedule_a_max_date(committee_dir))
-  next unless ceiling_date # no processed baseline to compare against; skip rather than guess
+  return unless ceiling_date # no processed baseline to compare against; skip rather than guess
 
   dated = []
   receipt_efile_paths(committee_dir).each do |path|
@@ -230,7 +202,7 @@ committees(options[:fec_dir]).each do |cid|
     group_name, hit = matched_group(options, haystack)
     next unless group_name
 
-    matches << Match.new(
+    matches << DonorMatch.new(
       group: group_name, keyword: hit, committee_id: cid, committee_name: row["committee_name"],
       file: path, line: lineno, date: d.to_s,
       contributor_name: name, contributor_employer: row["contributor_employer"],
@@ -241,10 +213,18 @@ committees(options[:fec_dir]).each do |cid|
   end
 end
 
-matches.sort_by! { |m| [m.group, -m.amount] }
+def scan_committee_receipts(fec_dir, cid, options, matches)
+  committee_dir = File.join(fec_dir, cid)
+  scan_schedule_a(committee_dir, cid, options, matches)
+  scan_efile_gap(committee_dir, cid, options, matches) if options[:include_efile_gap]
+end
 
-output =
-  if options[:format] == "json"
+# Named render_donor_report (not just "render") for the same reason as DonorMatch above:
+# vendor-keyword-scan.rb defines its own differently-behaving top-level `render`, and both
+# scripts get `require`-d into the same process under RSpec (and, later, under one Sinatra
+# app) — a same-named top-level method would silently clobber whichever loaded second.
+def render_donor_report(matches, format)
+  if format == "json"
     JSON.pretty_generate(
       matches.group_by(&:group).transform_values do |rows|
         {
@@ -287,9 +267,52 @@ output =
     end
     buf
   end
+end
 
-if options[:out]
-  File.write(options[:out], output)
-else
-  puts output
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+if $PROGRAM_NAME == __FILE__
+  options = { fec_dir: nil, groups: {}, cycle: nil, format: "text", out: nil, include_efile_gap: false }
+
+  OptionParser.new do |opts|
+    opts.banner = "Usage: donor-keyword-scan.rb --fec-dir DIR (--group \"Name=kw1,kw2\" | --keywords kw1,kw2) [options]"
+    opts.on("--fec-dir DIR", "Candidate's fec/ directory") { |v| options[:fec_dir] = v }
+    opts.on("--group SPEC", "Named keyword group as Name=kw1,kw2,... (repeatable)") do |v|
+      name, kws = v.split("=", 2)
+      raise OptionParser::InvalidArgument, v if name.nil? || kws.nil?
+      options[:groups][name] = kws.split(",").map(&:strip)
+    end
+    opts.on("--keywords LIST", "Comma-separated keywords, grouped under 'Matches'") do |v|
+      options[:groups]["Matches"] = v.split(",").map(&:strip)
+    end
+    opts.on("--cycle YYYY", "Scope to a single two_year_transaction_period (processed rows only; efile gap rows are approximated by calendar year)") { |v| options[:cycle] = v }
+    opts.on("--include-efile-gap", "Also scan raw receipts-shaped efile-*.csv rows dated after schedule_a's latest date (see header comment)") do
+      options[:include_efile_gap] = true
+    end
+    opts.on("--format FORMAT", "text (default) or json") { |v| options[:format] = v }
+    opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
+    opts.on("-h", "--help", "Show this help") do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  if options[:fec_dir].nil? || options[:groups].empty?
+    warn "Error: --fec-dir and at least one of --group/--keywords are required. See --help."
+    exit 1
+  end
+
+  matches = []
+  committees(options[:fec_dir]).each { |cid| scan_committee_receipts(options[:fec_dir], cid, options, matches) }
+  matches.sort_by! { |m| [m.group, -m.amount] }
+
+  output = render_donor_report(matches, options[:format])
+
+  if options[:out]
+    File.write(options[:out], output)
+  else
+    puts output
+  end
 end

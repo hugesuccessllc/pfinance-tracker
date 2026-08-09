@@ -71,54 +71,28 @@
 #   absent field never matched, and the whole gap window vanished with no warning. Fixed to
 #   approximate by calendar year for rows missing that column, matching how
 #   analyze-candidate.rb and donor-keyword-scan.rb already handle the same gap.
+#
+# TESTING: everything below the CLI guard (`if $PROGRAM_NAME == __FILE__`) is the
+# executable entry point; `require`-ing this file (as spec/vendor_keyword_scan_spec.rb
+# does) loads only the VendorMatch/PathedCsv structs and the helper methods, with no side
+# effects, so they can be exercised directly against fixture data.
+#
+# VendorMatch (not just "Match") because donor-keyword-scan.rb's sibling struct needs a
+# distinct top-level constant name too — both scripts get `require`-d into the same
+# process under RSpec (and will, later, under the same Sinatra app), and plain `Match` in
+# both would silently clobber whichever loaded second.
 
-ENV["BUNDLE_GEMFILE"] ||= File.expand_path("Gemfile", __dir__)
-require "bundler/setup"
+require_relative "lib/bootstrap"
+require_relative "lib/fec_committees"
 
 require "csv"
 require "optparse"
 require "json"
 require "bigdecimal"
 
-options = { fec_dir: nil, groups: {}, cycle: nil, format: "text", out: nil, include_efile_gap: false }
-
-OptionParser.new do |opts|
-  opts.banner = "Usage: vendor-keyword-scan.rb --fec-dir DIR (--group \"Name=kw1,kw2\" | --keywords kw1,kw2) [options]"
-  opts.on("--fec-dir DIR", "Candidate's fec/ directory") { |v| options[:fec_dir] = v }
-  opts.on("--group SPEC", "Named keyword group as Name=kw1,kw2,... (repeatable)") do |v|
-    name, kws = v.split("=", 2)
-    raise OptionParser::InvalidArgument, v if name.nil? || kws.nil?
-    options[:groups][name] = kws.split(",").map(&:strip)
-  end
-  opts.on("--keywords LIST", "Comma-separated keywords, grouped under 'Matches'") do |v|
-    options[:groups]["Matches"] = v.split(",").map(&:strip)
-  end
-  opts.on("--cycle YYYY", "Scope to a single two_year_transaction_period") { |v| options[:cycle] = v }
-  opts.on("--include-efile-gap", "Also scan raw efile-*.csv rows dated after schedule_b's latest date (see header comment)") do
-    options[:include_efile_gap] = true
-  end
-  opts.on("--format FORMAT", "text (default) or json") { |v| options[:format] = v }
-  opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
-  opts.on("-h", "--help", "Show this help") do
-    puts opts
-    exit
-  end
-end.parse!
-
-if options[:fec_dir].nil? || options[:groups].empty?
-  warn "Error: --fec-dir and at least one of --group/--keywords are required. See --help."
-  exit 1
-end
-
-Match = Struct.new(:group, :keyword, :committee_id, :committee_name, :file, :line, :date,
-                    :recipient_name, :recipient_city, :recipient_state, :amount,
-                    :description, :category, :memo_code, :transaction_id, :source, keyword_init: true)
-
-def committees(fec_dir)
-  Dir.children(fec_dir)
-     .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(fec_dir, d)) }
-     .sort
-end
+VendorMatch = Struct.new(:group, :keyword, :committee_id, :committee_name, :file, :line, :date,
+                          :recipient_name, :recipient_city, :recipient_state, :amount,
+                          :description, :category, :memo_code, :transaction_id, :source, keyword_init: true)
 
 # The efile-*.csv naming convention doesn't distinguish receipts-shaped from
 # disbursements-shaped files — only the header does. A committee's receipts-shaped efile
@@ -170,7 +144,7 @@ def scan_rows(csv_enum, options, matches, cid, committee_dir_label, source:, min
       hit = keywords.find { |kw| haystack.include?(kw.downcase) }
       next unless hit
 
-      matches << Match.new(
+      matches << VendorMatch.new(
         group: group_name,
         keyword: hit,
         committee_id: cid,
@@ -193,7 +167,7 @@ def scan_rows(csv_enum, options, matches, cid, committee_dir_label, source:, min
   end
 end
 
-# Thin wrapper pairing a CSV with its own path, since Match needs to report the file it
+# Thin wrapper pairing a CSV with its own path, since VendorMatch needs to report the file it
 # came from and plain CSV#lineno alone doesn't carry that.
 PathedCsv = Struct.new(:path, :csv) do
   def next_row
@@ -205,10 +179,8 @@ PathedCsv = Struct.new(:path, :csv) do
   end
 end
 
-matches = []
-
-committees(options[:fec_dir]).each do |cid|
-  committee_dir = File.join(options[:fec_dir], cid)
+def scan_committee_disbursements(fec_dir, cid, options, matches)
+  committee_dir = File.join(fec_dir, cid)
 
   Dir.glob(File.join(committee_dir, "schedule_b-*.csv")).each do |path|
     File.open(path) do |f|
@@ -216,10 +188,10 @@ committees(options[:fec_dir]).each do |cid|
     end
   end
 
-  next unless options[:include_efile_gap]
+  return unless options[:include_efile_gap]
 
   max_date = schedule_b_max_date(committee_dir)
-  next if max_date.nil? # no schedule_b baseline to compare against; skip rather than guess
+  return if max_date.nil? # no schedule_b baseline to compare against; skip rather than guess
 
   disbursement_efile_paths(committee_dir).each do |path|
     File.open(path) do |f|
@@ -229,10 +201,12 @@ committees(options[:fec_dir]).each do |cid|
   end
 end
 
-matches.sort_by! { |m| [m.group, -m.amount] }
-
-output =
-  if options[:format] == "json"
+# Named render_vendor_report (not just "render") for the same reason as VendorMatch above:
+# donor-keyword-scan.rb defines its own differently-behaving top-level `render`, and both
+# scripts get `require`-d into the same process under RSpec (and, later, under one Sinatra
+# app) — a same-named top-level method would silently clobber whichever loaded second.
+def render_vendor_report(matches, format)
+  if format == "json"
     JSON.pretty_generate(
       matches.group_by(&:group).transform_values do |rows|
         {
@@ -275,9 +249,52 @@ output =
     end
     buf
   end
+end
 
-if options[:out]
-  File.write(options[:out], output)
-else
-  puts output
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+if $PROGRAM_NAME == __FILE__
+  options = { fec_dir: nil, groups: {}, cycle: nil, format: "text", out: nil, include_efile_gap: false }
+
+  OptionParser.new do |opts|
+    opts.banner = "Usage: vendor-keyword-scan.rb --fec-dir DIR (--group \"Name=kw1,kw2\" | --keywords kw1,kw2) [options]"
+    opts.on("--fec-dir DIR", "Candidate's fec/ directory") { |v| options[:fec_dir] = v }
+    opts.on("--group SPEC", "Named keyword group as Name=kw1,kw2,... (repeatable)") do |v|
+      name, kws = v.split("=", 2)
+      raise OptionParser::InvalidArgument, v if name.nil? || kws.nil?
+      options[:groups][name] = kws.split(",").map(&:strip)
+    end
+    opts.on("--keywords LIST", "Comma-separated keywords, grouped under 'Matches'") do |v|
+      options[:groups]["Matches"] = v.split(",").map(&:strip)
+    end
+    opts.on("--cycle YYYY", "Scope to a single two_year_transaction_period") { |v| options[:cycle] = v }
+    opts.on("--include-efile-gap", "Also scan raw efile-*.csv rows dated after schedule_b's latest date (see header comment)") do
+      options[:include_efile_gap] = true
+    end
+    opts.on("--format FORMAT", "text (default) or json") { |v| options[:format] = v }
+    opts.on("--out FILE", "Write output to FILE instead of stdout") { |v| options[:out] = v }
+    opts.on("-h", "--help", "Show this help") do
+      puts opts
+      exit
+    end
+  end.parse!
+
+  if options[:fec_dir].nil? || options[:groups].empty?
+    warn "Error: --fec-dir and at least one of --group/--keywords are required. See --help."
+    exit 1
+  end
+
+  matches = []
+  committees(options[:fec_dir]).each { |cid| scan_committee_disbursements(options[:fec_dir], cid, options, matches) }
+  matches.sort_by! { |m| [m.group, -m.amount] }
+
+  output = render_vendor_report(matches, options[:format])
+
+  if options[:out]
+    File.write(options[:out], output)
+  else
+    puts output
+  end
 end

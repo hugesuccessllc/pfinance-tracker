@@ -2,7 +2,31 @@
 
 This directory contains Ruby scripts for analyzing candidate campaign finance disclosures.
 
-**Run every script here as plain `ruby tooling/<script>.rb ...` from the repo root — never `bundle exec ruby tooling/<script>.rb`.** All three scripts (`analyze-candidate.rb`, `fec-api-client.rb`, `vendor-keyword-scan.rb`) share dependencies pinned in `tooling/Gemfile` (`pdf-reader`, `csv`, `bigdecimal`), not the repo-root `Gemfile`, and each one pins its own `ENV["BUNDLE_GEMFILE"]` to `tooling/Gemfile` at the top of the file so plain `ruby` resolves gems correctly no matter your working directory — no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. Running any of them under `bundle exec` from the repo root sets `BUNDLE_GEMFILE` to the root `Gemfile` *before* the script's own `||=` gets a chance to act, so bundler resolves against the wrong Gemfile: `analyze-candidate.rb` hard-fails with `cannot load such file -- pdf-reader` (it's the only one that needs a gem the root Gemfile doesn't have); `fec-api-client.rb` and `vendor-keyword-scan.rb` don't hard-fail today since `csv`/`bigdecimal` still resolve as system default gems, but they'd hit the same failure the moment either script's dependencies changed, and they already emit Ruby 3.4 deprecation warnings under `bundle exec` that plain `ruby` doesn't. If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/<script>.rb ...`.
+**Run every script here as plain `ruby tooling/<script>.rb ...` from the repo root (or `ruby <script>.rb` from inside `tooling/`) — never `bundle exec ruby tooling/<script>.rb`.** All four scripts (`analyze-candidate.rb`, `donor-keyword-scan.rb`, `fec-api-client.rb`, `vendor-keyword-scan.rb`) start with `require_relative "lib/bootstrap"`, which pins gem resolution to `tooling/Gemfile` (`pdf-reader`, `csv`, `bigdecimal`, plus `rspec`/`webmock` for the test suite) — not the empty repo-root `Gemfile` — so plain `ruby` resolves gems correctly no matter your working directory, with no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. See `tooling/lib/bootstrap.rb` for the one-file explanation of why (short version: `bundle exec` sets `BUNDLE_GEMFILE` to the repo-root Gemfile *before* a script's own `require_relative` runs, and nothing can override an already-set env var after that, so bundler ends up resolving against the wrong Gemfile). If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/<script>.rb ...`.
+
+Every script's CLI entry point (option parsing, ARGV validation, and all execution) lives behind an `if $PROGRAM_NAME == __FILE__` guard at the bottom of the file — everything above that (classes, structs, top-level helper methods) is safe to `require_relative` from a test or, eventually, a web app with no side effects. See "Running the tests" below.
+
+## Running the tests
+
+Each script has an RSpec suite under `tooling/spec/` (`spec/vendor_keyword_scan_spec.rb`, `spec/donor_keyword_scan_spec.rb`, `spec/fec_api_client_spec.rb`, `spec/analyze_candidate/`) that exercises its classes/structs/methods directly against throwaway fixture data — no real `tx-*/` candidate data or live network calls involved (HTTP is stubbed with WebMock in the `fec-api-client.rb` specs). These are characterization tests written to pin down *current* behavior — including the data-integrity gotchas documented in each script's header comments — as a safety net before any refactor, not an exhaustive spec of intended behavior.
+
+```bash
+# From inside tooling/ (primary way to run them):
+cd tooling && bundle exec rspec
+
+# From the repo root, same rule as running the tools themselves — explicit BUNDLE_GEMFILE:
+BUNDLE_GEMFILE=tooling/Gemfile bundle exec rspec tooling/spec
+
+# A single file:
+cd tooling && bundle exec rspec spec/vendor_keyword_scan_spec.rb
+```
+
+Fixture helpers live in `tooling/spec/support/` and are auto-loaded by `spec/spec_helper.rb`:
+- `fixture_helpers.rb` — `schedule_a_row`/`schedule_b_row`/`efile_receipt_row`/`efile_disbursement_row` build single CSV rows with realistic defaults (override any column via keyword args); `fec_dir_with(committees_hash)` writes a full `fec/<committee-id>/schedule_a-*.csv` etc. tree to a fresh temp dir and returns its path. Only the columns each tool actually reads are included by default — not the 70+ column real FEC export header — since `CSV#[]` returns `nil` for any column a fixture omits, and every tool already treats a missing/blank field as absent data.
+- `pdf_fixtures.rb` — `build_pdf(lines)` generates a minimal valid one-page PDF from an array of text lines, for `HouseEthicsScanner` specs, instead of checking in real House Ethics filings as binary fixtures.
+- `output_capture.rb` — `capture_stdout { ... }` / `capture_stderr { ... }` for specs that exercise `puts`/`warn`-heavy code paths.
+
+**Gotcha:** several fixture helpers take a positional `Hash` argument alongside keyword arguments (e.g. `fec_dir_with`). Ruby 3 requires wrapping a string-keyed hash literal in explicit braces at the call site in that situation — `fec_dir_with({"C00000001" => {...}})`, not `fec_dir_with("C00000001" => {...})` — or it raises `ArgumentError: wrong number of arguments`.
 
 ## analyze-candidate.rb
 
@@ -92,6 +116,38 @@ ruby tooling/vendor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec \
 **The efile gap.** fec.gov's `schedule_b-*.csv` is a "processed" export that can lag a campaign's actual raw filings by months — observed on Pfluger's principal committee and JFC, where `schedule_b` stopped three months before the raw `efile-*.csv` did. `--include-efile-gap` does **not** blindly merge the two (spot-checking found `efile` and `schedule_b` `transaction_id` values don't reliably match for the same transaction, so naive dedup isn't safe — see the double-count warning in the script's header). Instead, per committee, it finds `schedule_b`'s own latest `disbursement_date` and scans only the disbursement-shaped efile rows dated strictly after that — a window `schedule_b` provably has zero rows in. Matches sourced this way are tagged `[efile, not yet in processed export]` (or `"source": "efile-gap"` in JSON).
 
 **Caveats:** substring matching both over- and under-catches — spot-check matches before publishing a total, and see the script's header comments for the full list of gotchas (memo/card sub-item accounting, negative-amount corrections, the efile-gap mechanics).
+
+## donor-keyword-scan.rb
+
+**Purpose:** Sibling to `vendor-keyword-scan.rb`, for the other side of the ledger — line-referenced keyword search over a candidate's Schedule A (receipts) data. Where `analyze-candidate.rb` answers "who gave the most, in aggregate," this tool answers "show me every itemized contribution whose donor name, employer, or occupation matches one of these keywords, with an exact file and line number for each" — for a themed donor report (e.g. "which receipts trace to a particular industry") where a reader needs to check the underlying filing. It does not editorialize: it prints matched rows and per-group subtotals; grouping keywords and writing prose about what a pattern means is the caller's job.
+
+**Usage:**
+
+```bash
+ruby tooling/donor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec --cycle 2026 \
+  --group "Oil & Gas=oil,gas,petroleum,permian,drilling,energy,resources,operating"
+
+ruby tooling/donor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec \
+  --keywords "teachers union,afscme" --format json
+```
+
+**Flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `--fec-dir DIR` | Candidate's `fec/` directory |
+| `--group "Name=kw1,kw2,..."` | Named keyword group (repeatable); matches are case-insensitive substrings against `contributor_name`, `contributor_employer`, and `contributor_occupation` |
+| `--keywords LIST` | Shorthand for a single unnamed group ("Matches") |
+| `--cycle YYYY` | Scope to one `two_year_transaction_period` (processed rows only; efile-gap rows are approximated by calendar year) |
+| `--include-efile-gap` | Also scan raw receipts-shaped `efile-*.csv` rows dated after `schedule_a`'s own latest date — see "The efile gap" below |
+| `--format json` | JSON instead of text |
+| `--out FILE` | Write to a file instead of stdout |
+
+**Donor scoping** mirrors `analyze-candidate.rb`'s `analyze_donors` (read its header comments, gotchas 1, 3, and 7, before trusting a total): only rows whose `line_number_label` is "Contributions From Individuals/Persons Other Than Political Committees" or "Contributions From Other Political Committees" count — this deliberately excludes "Transfers from authorized committees" (a JFC's pooled redistribution, not a direct donor relationship). `memo_code == "X"` rows are always skipped (informational sub-items of a total already counted elsewhere).
+
+**The efile gap.** Same shape as `vendor-keyword-scan.rb`'s (see that section above), but for receipts: `--include-efile-gap` finds `schedule_a`'s own latest `contribution_receipt_date` per committee and scans only receipts-shaped efile rows dated strictly after that. Raw efile receipts need more reconciliation than disbursements do, because a single filing can appear multiple times in efile as amendments are processed (`schedule_a`, by contrast, already resolves amendments upstream) — gap rows go through two dedup passes (by `transaction_id`, then by a `[date, amount, contributor name]` natural key, each keeping the latest `load_timestamp`) before being restricted to line `11AI`/individual or `11C`/political-committee rows, matching `analyze-candidate.rb`'s own `EFILE_INDIVIDUAL_LINES`/`EFILE_COMMITTEE_LINES`. Matches sourced this way are tagged `[efile, not yet in processed export]` (or `"source": "efile-gap"` in JSON).
+
+**Caveats:** same substring-matching over/under-match risk as `vendor-keyword-scan.rb` — spot-check matches before publishing a total, and see the script's header comments for the full gotcha list.
 
 ## fec-api-client.rb
 

@@ -7,3 +7,8 @@ gem "csv"
 gem "pdf-reader", "~> 2.15"
 
 gem "bigdecimal", "~> 3.3"
+
+group :test do
+  gem "rspec", "~> 3.13"
+  gem "webmock", "~> 3.24" # stubs Net::HTTP in fec-api-client.rb specs; blocks real network calls
+end

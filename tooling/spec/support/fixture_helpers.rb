@@ -65,6 +65,13 @@ module FixtureHelpers
 
   # A raw efile row shaped like the receipts-side efile-*.csv (has
   # contribution_receipt_amount, no schedule_a-only columns like line_number_label).
+  # Deliberately has NO "contributor_name" key — real receipts-shaped efile-*.csv doesn't
+  # carry that column (confirmed against actual Pfluger efile headers); only
+  # contributor_last/first/middle_name exist, and for a PAC/committee-type donor row the
+  # committee's full name is filed in contributor_last_name, same field an individual's
+  # surname would use. Adding a synthetic "contributor_name" here previously masked a real
+  # bug in donor-keyword-scan.rb's scan_efile_gap (see that method's comment) where PAC-type
+  # gap rows were matched against a column that doesn't exist in production data.
   def efile_receipt_row(overrides = {})
     {
       "line_number" => "11AI",
@@ -73,7 +80,6 @@ module FixtureHelpers
       "contributor_first_name" => "Jane",
       "contributor_middle_name" => "",
       "contributor_last_name" => "Doe",
-      "contributor_name" => "Doe, Jane",
       "contributor_city" => "Austin",
       "contributor_state" => "TX",
       "contributor_employer" => "Acme Corp",

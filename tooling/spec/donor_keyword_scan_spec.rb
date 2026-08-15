@@ -265,14 +265,16 @@ RSpec.describe "donor-keyword-scan.rb" do
                                  entity_type: "IND", line_number: "11AI",
                                  transaction_id: "T1", contribution_receipt_amount: "10.00",
                                  contribution_receipt_date: "2026-07-01"),
-              efile_receipt_row(contributor_name: "MatchPacC", entity_type: "PAC", line_number: "11C",
+              efile_receipt_row(contributor_last_name: "MatchPacC", contributor_first_name: "", contributor_middle_name: "",
+                                 entity_type: "PAC", line_number: "11C",
                                  transaction_id: "T2", contribution_receipt_amount: "20.00",
                                  contribution_receipt_date: "2026-07-02"),
               efile_receipt_row(contributor_last_name: "MatchIndC", contributor_first_name: "", contributor_middle_name: "",
                                  entity_type: "IND", line_number: "11C",
                                  transaction_id: "T3", contribution_receipt_amount: "30.00",
                                  contribution_receipt_date: "2026-07-03"),
-              efile_receipt_row(contributor_name: "MatchPacAI", entity_type: "PAC", line_number: "11AI",
+              efile_receipt_row(contributor_last_name: "MatchPacAI", contributor_first_name: "", contributor_middle_name: "",
+                                 entity_type: "PAC", line_number: "11AI",
                                  transaction_id: "T4", contribution_receipt_amount: "40.00",
                                  contribution_receipt_date: "2026-07-04")
             ]

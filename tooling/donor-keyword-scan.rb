@@ -197,7 +197,18 @@ def scan_efile_gap(committee_dir, cid, options, matches)
     next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
                 (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
 
-    name = is_individual ? efile_contributor_name(row) : row["contributor_name"].to_s.strip
+    # BUG FIX (found while building the 2026 data-center/AI report): raw receipts-shaped
+    # efile-*.csv has NO "contributor_name" column at all (confirmed against real Pfluger
+    # efile headers) — only contributor_last/first/middle_name, and for a PAC/committee-type
+    # donor row the *committee's* full name is filed in contributor_last_name, same as an
+    # individual's surname would be. Special-casing committee rows onto the nonexistent
+    # "contributor_name" column silently produced an all-blank haystack for every PAC-type
+    # efile-gap donor row, so a PAC that only gave in the still-unprocessed gap window was
+    # invisible to keyword matching no matter what group/keyword it should have hit (e.g. a
+    # $5,000 AEP PAC check dated after Pfluger Victory Committee's schedule_a cutoff). Always
+    # calling efile_contributor_name(row) matches analyze-candidate.rb's own (already correct)
+    # handling of this exact same efile shape — see its record_donor efile branches.
+    name = efile_contributor_name(row)
     haystack = [name, row["contributor_employer"], row["contributor_occupation"]].join(" ").downcase
     group_name, hit = matched_group(options, haystack)
     next unless group_name

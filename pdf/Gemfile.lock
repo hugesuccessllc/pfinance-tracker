@@ -1,0 +1,33 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    bigdecimal (3.3.1)
+    chunky_png (1.4.0)
+    matrix (0.4.3)
+    pdf-core (0.10.0)
+    prawn (2.5.0)
+      matrix (~> 0.4)
+      pdf-core (~> 0.10.0)
+      ttfunk (~> 1.8)
+    rqrcode (3.2.0)
+      chunky_png (~> 1.0)
+      rqrcode_core (~> 2.0)
+    rqrcode_core (2.1.0)
+    ttfunk (1.8.0)
+      bigdecimal (~> 3.1)
+    yaml (0.4.0)
+
+PLATFORMS
+  arm64-darwin-25
+  ruby
+
+DEPENDENCIES
+  prawn (~> 2.5)
+  rqrcode (~> 3.0)
+  yaml
+
+RUBY VERSION
+   ruby 3.3.8p144
+
+BUNDLED WITH
+   2.5.22

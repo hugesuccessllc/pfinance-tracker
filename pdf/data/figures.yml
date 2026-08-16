@@ -1,0 +1,175 @@
+# figures.yml — every number the slick sheet prints, and where each one came from.
+#
+# THIS FILE HOLDS DATA ONLY. All prose (headlines, captions, subtitles, step text)
+# lives in copy/slicksheet.md, where a non-programmer can edit it without touching
+# numbers. The only text here is the short label naming each chart mark, which stays
+# beside the value it names so the two can never drift apart.
+#
+# RULE (see pdf/README.md): every figure below must trace to a file already published
+# under tx-11/august-pfluger/reports/ or tx-11/august-pfluger/README.md. No number here
+# was computed for the slick sheet. Each is copied verbatim from its source report, with
+# that report's own file and section noted alongside it. build-slicksheet.rb reads only
+# this file and the copy deck; it never opens a CSV and never does arithmetic on a total.
+#
+# Percentages are quoted at the precision their source report published (oil and gas to
+# one decimal, the others to two). The build renders them with %g so it never pads a
+# figure out to a significant digit the report never claimed.
+
+infographic_1:
+  source: "tx-11/august-pfluger/README.md — Major Spending (FEC category totals)"
+  # All four are drawn from the same "operating spend by FEC category" breakdown, so
+  # they sit honestly on one shared scale. Deliberately NOT mixed with the JFC's
+  # inter-committee transfer figures ($2,090,787.64 back to the campaign, $922,789.74
+  # to Raptor PAC, $638,886.02 to the NRCC). Those are transfers between committees
+  # rather than operating spend, and putting both kinds of money on one axis would
+  # overstate the comparison. The transfer story lives in the narrative band instead.
+  bars:
+    - label: "Administrative, salary & overhead"
+      value: 1779330.42
+    - label: "Contributions to 235 other GOP candidates"
+      value: 1067500.00
+    - label: "Fundraising & donor solicitation"
+      value: 921673.10
+    - label: "Advertising that reaches TX-11 voters"
+      value: 133299.71
+      highlight: true
+
+infographic_2:
+  # Bars are scaled by share of receipts, which is the comparable quantity across
+  # industries; the dollar figure rides in each bar's own label.
+  scale_max_pct: 30
+  rows:
+    - label: "Oil & Gas"
+      pct: 25.2
+      value: 1338669.21
+      denominator: 5317758.43
+      source: "tx-11/august-pfluger/reports/2026-oil-and-gas.md — The short version (2026-cycle share)"
+    - label: "AI & Data Centers"
+      pct: 2.45
+      value: 130500.00
+      denominator: 5317758.43
+      source: "tx-11/august-pfluger/reports/2026-datacenters.md — The short version"
+    - label: "Automotive"
+      pct: 0.78
+      value: 41500.00
+      denominator: 5317758.43
+      source: "tx-11/august-pfluger/reports/2026-automotive.md — The short version"
+  # All three rows share one denominator. An earlier printing did not: the data-center
+  # report was then running on older exports covering three of the four committees, so
+  # its share sat on a $5,257,758.43 base while the other two used $5,317,758.43. That
+  # report has since been regenerated against the same exports. The fix was to refresh
+  # the report, never to re-divide the numerator here.
+
+infographic_3:
+  source: "tx-11/august-pfluger/reports/2026-luxury-spending.md"
+  trend:
+    - cycle: 2020
+      pct: 0.30
+    - cycle: 2022
+      pct: 2.25
+    - cycle: 2024
+      pct: 6.50
+    - cycle: 2026
+      pct: 7.22
+  categories:
+    - label: "Fine dining"
+      value: 447258.39
+    - label: "Retreats & resorts"
+      value: 568017.76
+    - label: "Luxury ground transport"
+      value: 81469.53
+    - label: "Donor gifts"
+      value: 59655.02
+  total_since_2020: 1156400.70
+  total_2026: 583137.27
+
+infographic_4:
+  source: "tx-11/august-pfluger/reports/2026-outside-texas.md"
+  pct_contributions_out_of_state: 67.6
+  pct_dollars_out_of_state: 26.8
+  pct_contributions_out_of_state_2026: 84.4
+  top_states:
+    - label: "DC"
+      value: 1356387.28
+    - label: "VA"
+      value: 757986.01
+    - label: "CA"
+      value: 329438.92
+
+verify_page:
+  committees:
+    - id: "C00719294"
+      name: "August Pfluger for Congress (principal campaign committee)"
+    - id: "C00753913"
+      name: "Pfluger Victory Fund (joint fundraising committee)"
+    - id: "C00749481"
+      name: "Raptor PAC (leadership PAC)"
+
+footer:
+  qr_target: "https://claire11.org"
+
+# ---------------------------------------------------------------------------
+# CITATION LEDGER (provenance only, never rendered)
+#
+# The copy deck quotes figures inside sentences, where a `source:` key cannot live.
+# Those citations live here instead, so rule 4 still holds: every number printed on the
+# sheet traces to an already-published report. Nothing below is drawn on the page.
+#
+# If you change a quoted figure in copy/slicksheet.md, change its entry here too. If a
+# figure is not in a published report yet, go write that report first.
+cited_in_copy:
+  - figure: "$5.3 million raised across four committees"
+    exact: 5317758.43
+    slots: ["masthead.dek", "narrative.bullets"]
+    source: "tx-11/august-pfluger/README.md — opening summary"
+  - figure: "$642,100 from a single Midland oil executive"
+    exact: 642100.00
+    slots: ["narrative.bullets"]
+    source: "tx-11/august-pfluger/README.md — Key Donors (Syed Javaid Anwar), Takeaway 2"
+  - figure: "$642,408.43 from every donor to the principal committee combined"
+    exact: 642408.43
+    slots: ["narrative.bullets"]
+    source: "tx-11/august-pfluger/README.md — Takeaway 2"
+  - figure: "$15,001 to $50,000 stakes in six companies, three of them oil and gas"
+    slots: ["narrative.bullets"]
+    source: >
+      tx-11/august-pfluger/README.md — Takeaway 4 (Dorchester Minerals, Enterprise
+      Products Partners, and Viper Energy among six March 2026 purchases; House Energy
+      and Commerce). These are the disclosure ranges House Ethics filings report, not
+      exact amounts, which is why no `exact` value is recorded here.
+  - figure: "eight times more to other candidates than to ads; seven times more to fundraising"
+    slots: ["panel.spending.caption"]
+    source: >
+      tx-11/august-pfluger/README.md — Major Spending. Ratios of the same four category
+      totals charted in infographic_1 above, rounded down to the nearest whole multiple.
+  - figure: "$638,886.02 transferred to the national party"
+    exact: 638886.02
+    slots: ["panel.spending.caption"]
+    source: "tx-11/august-pfluger/README.md — opening summary (NRCC transfer)"
+  - figure: "$5,317,758.43 shared denominator"
+    exact: 5317758.43
+    slots: ["panel.industry.footnote"]
+    source: "tx-11/august-pfluger/README.md — opening summary"
+  - figure: "$583,137 of luxury spending in this cycle"
+    exact: 583137.27
+    slots: ["panel.luxury.strip"]
+    source: "tx-11/august-pfluger/reports/2026-luxury-spending.md — The math, laid plain"
+  - figure: "$150,000 initiation fee at Baltusrol Golf Club"
+    exact: 150000.00
+    slots: ["panel.luxury.caption"]
+    source: "tx-11/august-pfluger/reports/2026-luxury-spending.md — Retreats and resorts"
+  - figure: "The Capital Grille: $90,570.39 across 125 visits"
+    exact: 90570.39
+    slots: ["panel.luxury.caption", "verify.searches"]
+    source: >
+      tx-11/august-pfluger/reports/2026-luxury-spending.md — Fine dining. SCOPE MATTERS:
+      this is every cycle from 2020 through 2026 combined, not the 2026 cycle alone. The
+      report does not break this vendor out by cycle, so the copy says "since 2020"
+      rather than implying it is a single-cycle figure. Do not restate it as this-cycle
+      without first publishing a per-cycle number in that report.
+  - figure: "84.4% of contributions from outside Texas this cycle"
+    slots: ["panel.geography.stat_label"]
+    source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle"
+  - figure: "14.8% of contributions from outside Texas in his first race"
+    slots: ["panel.geography.caption"]
+    source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle (2020)"

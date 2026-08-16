@@ -905,6 +905,35 @@ RSpec.describe FecAnalyzer do
       expect(ghost[:at_cap]).to eq(false)
     end
 
+    it "flags an ORG-entity_type donor on the individual line as at_cap using the individual limit, even with blank election_type" do
+      # Regression for the processed-export twin of the Boldrick gotcha (see the tool's
+      # header/inline comments in analyze_refunds): an LLC/unincorporated entity filed
+      # under the individual-contributor line with entity_type "ORG" carries FEC's own
+      # is_individual "f" and, on this row, no election_type at all — both of which used
+      # to make the $12,000 contribution invisible to the cap check (wrong, higher limit
+      # via is_individual "f", then dropped entirely via the blank election_type).
+      fec_dir = fec_dir_with({
+        "C00000001" => {
+          schedule_a: [
+            schedule_a_row(contributor_name: "Entity Donor LLC", entity_type: "ORG", is_individual: "f",
+                            contribution_receipt_amount: "12000.00", contributor_aggregate_ytd: "12000.00",
+                            election_type: "")
+          ],
+          schedule_b: [
+            schedule_b_row(recipient_name: "Entity Donor LLC", disbursement_amount: "12000.00",
+                            line_number_label: "Refunds of Contributions Refunded")
+          ]
+        }
+      })
+
+      refunds = analyzer_for(fec_dir).send(:analyze_refunds)
+
+      expect(refunds[:at_cap].map { |r| r[:name] }).to eq(["Entity Donor LLC"])
+      entity = refunds[:at_cap].first
+      expect(entity[:at_cap_elections].first[:election]).to eq("UNKNOWN (no election_type on source row)")
+      expect(entity[:at_cap_elections].first[:aggregate_ytd]).to eq(BigDecimal("12000.00"))
+    end
+
     it "matches the numeric efile refund lines (20A/20B/20C/28A/28B/28C) in the gap window" do
       fec_dir = fec_dir_with({
         "C00000001" => {

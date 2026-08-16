@@ -991,8 +991,12 @@ class FecAnalyzer
       p[:state] = state.to_s.strip unless state.to_s.strip.empty?
       p[:is_individual] = is_individual
       p[:total_contributed] += amount
+      # A blank election_type (seen on both processed and efile rows — see the efile call
+      # site below for the raw-efile case) would otherwise vanish from by_election entirely
+      # (an empty hash key is as good as never having seen the row), silently dropping that
+      # dollar amount from the cap check rather than flagging it under an "unknown" bucket.
       et = election_type.to_s.strip
-      next if et.empty?
+      et = "UNKNOWN (no election_type on source row)" if et.empty?
       p[:by_election][et] = aggregate_ytd if aggregate_ytd > p[:by_election][et]
     end
 
@@ -1001,10 +1005,29 @@ class FecAnalyzer
         next if row["memo_code"] == "X"
         next unless CAP_CHECK_LABELS.include?(row["line_number_label"].to_s.strip)
         next unless cycle_matches?(row, cycle)
+        # FEC's own is_individual column is unreliable specifically for entity_type "ORG"
+        # rows filed under the individual-contributor line (11AI / DONOR_LABELS[0]) — LLCs
+        # and similar unincorporated entities are subject to the same per-election limit as
+        # an individual (this is the processed-export twin of the efile-path Boldrick fix
+        # below: "MILES BOLDRICK STATEWIDE MINERALS CO" gave $12,000 under 11AI with
+        # entity_type ORG and is_individual "f", which would silently apply the higher
+        # multicandidate-PAC limit instead of the individual one). Since which of the two
+        # DONOR_LABELS a row is filed under already signals individual- vs. committee-limit
+        # applicability — the whole reason DONOR_LABELS is split into two entries — trust
+        # that over the raw is_individual flag for those two labels. "Transfers from
+        # authorized committees" rows have no equivalent line-level signal (JFC pooling mixes
+        # both types under one label), so those still fall back to is_individual as filed.
+        line_label = row["line_number_label"].to_s.strip
+        is_individual =
+          case line_label
+          when DONOR_LABELS[0] then true
+          when DONOR_LABELS[1] then false
+          else row["is_individual"] == "t"
+          end
         record_contribution.call(
           name: row["contributor_name"], employer: row["contributor_employer"],
           occupation: row["contributor_occupation"], city: row["contributor_city"], state: row["contributor_state"],
-          amount: decimal(row["contribution_receipt_amount"]), is_individual: row["is_individual"] == "t",
+          amount: decimal(row["contribution_receipt_amount"]), is_individual: is_individual,
           election_type: row["election_type"], aggregate_ytd: decimal(row["contributor_aggregate_ytd"])
         )
       end

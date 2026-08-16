@@ -48,7 +48,8 @@ THE STORY IN THREE NUMBERS
 - **$5.3 million** raised across four separate committees in this cycle alone. That is a
   war chest built to entrench a career, not to fight for one election.
 - A single Midland oil executive gave **$642,100** through Pfluger's joint fundraising
-  committee. Every donor to his actual campaign committee, combined, gave **$642,408.43**.
+  committee. That one gift is practically equal to the amount every single other donor gave to his
+  actual campaign committee, combined.
 - In March 2026 he personally bought stakes of **$15,001 to $50,000** in six companies,
   three of them oil and gas, while sitting on the House committee that writes their rules.
 

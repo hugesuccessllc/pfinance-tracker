@@ -398,9 +398,10 @@ class SlickSheet
                   overflow: :shrink_to_fit
 
     bars = data["top_states"].map { |s| { label: s["label"], value: s["value"] } }
-    # row_height must stay >= label (7.5) + gap (3) + bar (13); at 22 the next row's
-    # label crept onto the previous bar.
-    horizontal_bars(@pdf, bars: bars, at: [x, bars_y - 13], width: inner_w, row_height: 24)
+    # row_height must clear label (7.5) + gap (3) + bar (13) = 23.5 or the next row's
+    # label crowds the previous bar. 24 technically cleared it but by only 0.5pt, which
+    # read as the label brushing the bar above it. 28 gives a visible ~4.5pt gap.
+    horizontal_bars(@pdf, bars: bars, at: [x, bars_y - 13], width: inner_w, row_height: 28)
 
     # This panel's caption is a single short line, so it needs less reserve than the
     # others, which gives the three bars above it room to clear it.
@@ -415,14 +416,19 @@ class SlickSheet
 
     # Section gaps are generous on purpose: this page is a set of instructions someone
     # follows with a phone in one hand, so it is set larger and airier than page 1.
-    y = draw_steps(y - 20)
-    y = draw_committee_box(y - 14)
-    y = draw_glossary(y - 16)
-    draw_closing(y - 16)
+    # Trimmed a few points from each when the CTA band grew to fit the voting-plan
+    # paragraph; #draw_call_to_action's own collision check is what proved this was
+    # still enough room, not eyeballing it.
+    y = draw_steps(y - 17)
+    y = draw_committee_box(y - 12)
+    y = draw_glossary(y - 14)
+    closing_bottom = draw_closing(y - 14)
 
     # The closing band is pinned above the footer rather than flowed, so it can never
-    # be pushed onto the disclaimer by copy changes in the sections above it.
-    draw_call_to_action
+    # be pushed onto the disclaimer by copy changes in the sections above it. It grows
+    # upward instead, toward the searches grid drawn just above it, so that direction
+    # is what draw_call_to_action checks against.
+    draw_call_to_action(ceiling: closing_bottom)
 
     draw_footer(page_one: false)
   end
@@ -528,9 +534,13 @@ class SlickSheet
                   character_spacing: 0.6,
                   overflow: :shrink_to_fit
 
-    col_w = (CONTENT_W - 24) / 3
+    committees = @f["verify_page"]["committees"]
+    # Column count follows the data rather than a hardcoded 3. A fixed divisor here is
+    # exactly how the earlier four-committees mismatch happened: the copy and the
+    # committee-ID box drifted out of sync because nothing tied them together.
+    col_w = (CONTENT_W - 24) / committees.size
 
-    @f["verify_page"]["committees"].each_with_index do |committee, index|
+    committees.each_with_index do |committee, index|
       cx = MARGIN + 12 + (index * col_w)
 
       @pdf.fill_color ACCENT_GOLD
@@ -653,31 +663,54 @@ class SlickSheet
                     overflow: :shrink_to_fit
     end
 
-    y - 88
+    # 3pt of trailing air below the last card, not the 10pt this used to carry. Reclaimed
+    # when the CTA band below grew to fit the voting-plan paragraph.
+    y - 81
   end
 
-  def draw_call_to_action
-    band_h = 54.0
+  # Sized to its own content rather than a fixed 54pt, so a copy edit that adds a
+  # sentence (the voting-plan paragraph did exactly this) grows the band instead of
+  # clipping or shrinking the text to fit a height nobody re-checked.
+  def draw_call_to_action(ceiling:)
+    text_w = CONTENT_W - 36
+    top_pad = 15.0
+    gap = 8.0
+    bottom_pad = 14.0
+
+    headline_h = measured_height(@c["cta.headline"], width: text_w, size: 12.5)
+    body_h = measured_height(@c["cta.body"], width: text_w, size: 8.2, leading: 1.5)
+    band_h = top_pad + headline_h + gap + body_h + bottom_pad
+
     top_y = FOOTER_TOP + 18 + band_h
+
+    # A band that grew enough to reach the content above it is a real layout bug, not
+    # something #text_box's shrink_to_fit should paper over silently. Fail loudly at
+    # build time instead of shipping an overlap that only a rendered proof would show.
+    if top_y > ceiling
+      raise "CTA band (top #{top_y.round(1)}) collides with the searches grid above it " \
+            "(bottom #{ceiling.round(1)}). Trim cta.body in copy/slicksheet.md, or widen " \
+            "page 2's layout."
+    end
 
     @pdf.fill_color DEEP_NAVY
     @pdf.fill_rectangle([MARGIN, top_y], CONTENT_W, band_h)
 
     @pdf.fill_color "FFFFFF"
     text_box @c["cta.headline"],
-                  at: [MARGIN + 18, top_y - 15],
-                  width: CONTENT_W - 36,
-                  height: 16,
+                  at: [MARGIN + 18, top_y - top_pad],
+                  width: text_w,
+                  height: headline_h + 2,
                   size: 12.5,
                   style: :bold,
                   overflow: :shrink_to_fit
 
     @pdf.fill_color PALE_BLUE
     text_box @c["cta.body"],
-                  at: [MARGIN + 18, top_y - 33],
-                  width: CONTENT_W - 36,
-                  height: 16,
+                  at: [MARGIN + 18, top_y - top_pad - headline_h - gap],
+                  width: text_w,
+                  height: body_h + 2,
                   size: 8.2,
+                  leading: 1.5,
                   overflow: :shrink_to_fit
 
     top_y - band_h

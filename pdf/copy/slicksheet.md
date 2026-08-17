@@ -18,6 +18,18 @@ in this file changes a chart, a number, or a calculation.
    every cycle since 2020, not the current one. The Capital Grille figure is the standing
    example. Say "since 2020" when that is what the number means.
 
+**Non-FEC facts** (election dates, statutes) do not go in `figures.yml`'s citation
+ledger, since that is scoped to already-published campaign-finance reports and there is
+no report to write for a date fixed by law. Cite the source inline in the sentence
+instead, the way `cta.body`'s voting dates cite Texas Election Code Section 85.001.
+That date was verified against the bill text of 2025's SB 2753 before being printed: SB
+2753 shortens early voting from 17 days before election day to 12, but only for an
+election ordered after the Secretary of State publishes a certification report required
+by that bill, which is not due until August 1, 2027. The November 2026 general election
+falls before that report, so the pre-SB-2753 17-day rule controls: early voting October
+17 through 30, 2026, Election Day November 3. Re-check this before reusing the copy for
+any election in 2027 or later, since the 12-day rule may be in force by then.
+
 Headings marked `##` are slot names the build script looks up. Do not rename or remove
 them. Under a slot, `###` sub-headings become titled entries (steps, glossary terms,
 search examples), a `-` list becomes bulleted lines, and anything else is plain text.
@@ -35,7 +47,7 @@ August Pfluger Isn't Fighting for TX-11. He's Building an Empire.
 
 ## masthead.dek
 
-Five committees. $5.3 million. A donor list that reaches from Midland oil money to
+Four committees. $5.3 million. A donor list that reaches from Midland oil money to
 Washington power brokers. Here is where that money comes from, and where it actually
 goes.
 
@@ -155,9 +167,10 @@ the search box at the top.
 
 ### Find his committees
 
-A candidate can have several. Three matter here: his campaign committee, his "Pfluger
-Victory Fund" (which collects the largest checks), and his leadership PAC, "Raptor PAC."
-Their ID numbers are listed below. You can go straight to any of them at
+A candidate can have several. He has four. Three carry real money: his campaign
+committee, his "Pfluger Victory Fund" (which collects the largest checks), and his
+leadership PAC, "Raptor PAC." The fourth barely moved any money in this cycle. All four
+ID numbers are listed below, so you can go straight to any of them at
 fec.gov/data/committee/ plus the ID.
 
 ### To see who gave him money, click "Receipts"
@@ -172,7 +185,7 @@ was for. Search a business name to see every charge to it.
 
 ## verify.committees_heading
 
-THE THREE COMMITTEE ID NUMBERS
+THE FOUR COMMITTEE ID NUMBERS
 
 ## verify.glossary_heading
 
@@ -197,7 +210,7 @@ candidate.
 
 ## verify.searches_heading
 
-FOUR SEARCHES THAT SHOW YOU THE WHOLE STORY
+FOUR SEARCHES THAT TELL THE STORY
 
 ## verify.searches
 
@@ -226,6 +239,10 @@ Look it up. Then decide who will actually work for TX-11.
 Every figure on the front of this sheet comes from these public filings. Check any one of
 them, then visit claire11.org.
 
+Then make a plan to vote. Early voting runs October 17 through 30, 2026. Election Day is
+November 3. Know your polling place and know when you are going. (Texas Election Code,
+Section 85.001.)
+
 ## footer.disclaimer
 
 Paid for by Claire Reynolds for Congress
@@ -233,7 +250,7 @@ Paid for by Claire Reynolds for Congress
 ## footer.source_note
 
 Source: FEC.gov campaign finance filings covering 2020 through 2026, committees
-C00719294, C00753913, and C00749481.
+C00719294, C00753913, C00749481, and C00840033.
 
 ## footer.turn_over
 

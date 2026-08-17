@@ -88,15 +88,24 @@ infographic_4:
   pct_contributions_out_of_state: 67.6
   pct_dollars_out_of_state: 26.8
   pct_contributions_out_of_state_2026: 84.4
+  # Full names, not postal abbreviations, per the operator's request; the panel has
+  # room. This is a naming expansion, not a computed figure: DC/VA/CA to their
+  # unambiguous full names, no new data derived. The source report above (this
+  # block's own `source:`) uses the abbreviations; no separate cited_in_copy entry
+  # is needed since these values live here as chart-mark data, not in the copy deck.
   top_states:
-    - label: "DC"
+    - label: "Washington, D.C."
       value: 1356387.28
-    - label: "VA"
+    - label: "Virginia"
       value: 757986.01
-    - label: "CA"
+    - label: "California"
       value: 329438.92
 
 verify_page:
+  # All four of Pfluger's 2026-cycle committees, matching the "four committees" the
+  # copy states elsewhere on the sheet. Keep this list and every "four committees"
+  # claim in copy/slicksheet.md in sync: this repo already shipped one print run where
+  # they had drifted apart (masthead said five, the box listed three).
   committees:
     - id: "C00719294"
       name: "August Pfluger for Congress (principal campaign committee)"
@@ -104,6 +113,8 @@ verify_page:
       name: "Pfluger Victory Fund (joint fundraising committee)"
     - id: "C00749481"
       name: "Raptor PAC (leadership PAC)"
+    - id: "C00840033"
+      name: "PFriends of Pfluger (joint fundraising committee, minimal 2026 activity)"
 
 footer:
   qr_target: "https://claire11.org"
@@ -121,7 +132,23 @@ cited_in_copy:
   - figure: "$5.3 million raised across four committees"
     exact: 5317758.43
     slots: ["masthead.dek", "narrative.bullets"]
-    source: "tx-11/august-pfluger/README.md — opening summary"
+    source: >
+      tx-11/august-pfluger/README.md — opening summary ("August Pfluger's 2026-cycle
+      money runs through four committees"). The masthead originally miscounted this as
+      "Five committees," caught only when the verify-page committee-ID box (which lists
+      real IDs and is harder to get wrong silently) was checked against it and came up
+      one short in the other direction. Both are now four, matching each other and the
+      source.
+  - figure: "The four committee IDs (C00719294, C00753913, C00749481, C00840033)"
+    slots: ["verify_page.committees", "footer.source_note"]
+    source: >
+      tx-11/august-pfluger/README.md — opening summary and Methodology (committee list).
+      All four appear in both the page-2 ID box and the footer source note. The fourth,
+      PFriends of Pfluger, is characterized there as "minimal 2026 activity" (a single
+      $5,000 receipt from E-PAC, fully refunded, net zero) per the source report's own
+      Methodology section, which is why the verify-page steps still describe only three
+      committees as the ones worth actually searching. Listing four is a completeness
+      fix, not a claim that the fourth carries meaningful money.
   - figure: "$642,100 from a single Midland oil executive, described as practically
       equal to the principal committee's entire donor total"
     exact: 642100.00

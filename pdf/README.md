@@ -240,7 +240,49 @@ committed file actually matches the current `figures.yml`.
 | `lib/bootstrap.rb` | `BUNDLE_GEMFILE` pin, so plain `ruby` resolves this dir's gems. |
 | `lib/chart_helpers.rb` | Palette, mark specs, bar/line/stat/panel primitives. |
 | `lib/qr_helper.rb` | QR code drawn as vector squares. |
+| `assets/circle-c.png` | Campaign logo. See the PNG gotcha below before adding another. |
 | `output/` | Generated PDFs. Build artifacts. |
+
+---
+
+## Adding an image asset
+
+Drop the file in `assets/` and reference it from `build-slicksheet.rb` with
+`Prawn::Document#image`, the way `draw_brand_mark` does for the logo. Two things to
+check before trusting the result:
+
+**Indexed-color PNGs render as visual noise, not a missing-image error.** Prawn's
+built-in PNG decoder does not handle color type 3 (indexed/palette) reliably. It does
+not raise or warn: it draws the palette index bytes as if they were color data, which
+looks like static, not like a missing asset. `assets/circle-c.png` shipped indexed
+(from whatever tool exported it) and rendered exactly that way the first time it was
+added here. Check before wiring up a new image:
+
+```bash
+ruby -rchunky_png -e 'puts ChunkyPNG::Datastream.from_file("pdf/assets/YOUR_FILE.png").header_chunk.color'
+# 3 = indexed (fails). 6 = truecolor+alpha (fine). 2 = truecolor, no alpha (fine).
+```
+
+If it prints `3`, re-encode it before using it:
+
+```bash
+ruby -rchunky_png -e '
+  img = ChunkyPNG::Image.from_file("pdf/assets/YOUR_FILE.png")
+  img.save("pdf/assets/YOUR_FILE.png", color_mode: ChunkyPNG::COLOR_TRUECOLOR_ALPHA, interlace: false)
+'
+```
+
+This only touches the file's internal encoding, not its pixels; re-run the sampling
+check from rule 6 above to confirm nothing shifted.
+
+**Check contrast against whatever is behind it, the same as any other mark.** The
+logo's ring color measures 1.49:1 against the masthead navy, which is well under this
+project's 3:1 floor and would make it nearly disappear if drawn directly on that
+background. `draw_brand_mark` gives it a white circle tile for exactly this reason, the
+same fix the QR's own background tile already applies on page 1. To validate a new
+placement the same way, load the `dataviz` skill and run its palette validator against
+the mark's color and whatever surface it sits on (see rule 7 above for how this project
+has used it): `validate_palette.js "<mark-hex>" --mode light --surface "<bg-hex>"`.
 
 ---
 
@@ -358,6 +400,9 @@ is here because the repo documents how its artifacts were produced. It is delibe
 
 > Ensure also (and make this a rule) that the PDF carries a generated-on timestamp.
 
+> Take the campaign logo at images/circle-c.png, and incorporate it tastefully in the
+> PDF. Probably in one of the corners.
+
 **Decisions made during the build** that a future run should know about, since they
 came from reviewing rendered output rather than from the prompt:
 
@@ -382,3 +427,15 @@ came from reviewing rendered output rather than from the prompt:
   decorative. The exceptions left in place are the two counter-examples under rule 1,
   the `grep` literal, and the verbatim prompts above, which are quoted as written and
   must not be edited.
+- The logo went to page 2's masthead, not page 1's. Page 1's matching corner is already
+  spoken for by the QR code, which rule 5 fixes at exactly one appearance; page 2's
+  corner was empty (its dek text box already reserved width there and nothing had ever
+  filled it). One placement, not two, also matches "probably in one of the corners" as
+  asked rather than doubling the mark across both pages.
+- The logo file itself needed a fix before it would render. See "Adding an image asset"
+  above: it shipped as an indexed-color PNG, which Prawn's decoder turns into visual
+  noise rather than an error, and its ring color measures 1.49:1 against the masthead
+  navy, which needed the same white-tile treatment already used for the QR. Neither
+  problem was visible from the source file alone. Both were caught by rendering the
+  page and looking at it, not by any of the mechanical `pdftotext`/`pdfinfo` checks,
+  which is exactly the gap "Verifying a build" above already warns those checks leave.

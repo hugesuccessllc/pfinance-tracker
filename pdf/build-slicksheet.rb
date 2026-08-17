@@ -433,6 +433,13 @@ class SlickSheet
     draw_footer(page_one: false)
   end
 
+  # Page 1's masthead corner is spoken for by the QR code (rule 5: exactly once, page 1
+  # only). Page 2's matching corner had nothing in it, so the campaign mark goes there.
+  # This mirrors page 1's own layout rather than inventing a new one: one graphic, top
+  # right, white circle behind it, page text reflowed to leave it room.
+  LOGO_PATH = File.expand_path("assets/circle-c.png", __dir__)
+  LOGO_TILE_D = 54.0
+
   def draw_verify_masthead
     band_top = PAGE_HEIGHT
     band_h = 78.0
@@ -440,10 +447,13 @@ class SlickSheet
     @pdf.fill_color DEEP_NAVY
     @pdf.fill_rectangle([0, band_top], PAGE_WIDTH, band_h)
 
+    draw_brand_mark(top: band_top - 14)
+    text_w = brand_mark_left_edge - MARGIN - 16
+
     @pdf.fill_color TINT_LIGHT
     text_box @c["verify.eyebrow"],
                   at: [MARGIN, band_top - 16],
-                  width: CONTENT_W,
+                  width: text_w,
                   height: 10,
                   size: 6.8,
                   style: :bold,
@@ -453,7 +463,7 @@ class SlickSheet
     @pdf.fill_color "FFFFFF"
     text_box @c["verify.headline"],
                   at: [MARGIN, band_top - 31],
-                  width: CONTENT_W,
+                  width: text_w,
                   height: 22,
                   size: 17,
                   style: :bold,
@@ -462,13 +472,41 @@ class SlickSheet
     @pdf.fill_color PALE_BLUE
     text_box @c["verify.dek"],
                   at: [MARGIN, band_top - 52],
-                  width: CONTENT_W - 90,
+                  width: text_w,
                   height: 24,
                   size: 7.6,
                   leading: 1.3,
                   overflow: :shrink_to_fit
 
     band_top - band_h
+  end
+
+  # Left edge of the brand mark's white tile, in absolute page coordinates. Text boxes
+  # reserve up to here, the same way page 1's masthead reserves up to the QR's own left
+  # edge, so a copy edit that lengthens verify.headline gets caught by overflow rather
+  # than drawing under the logo.
+  def brand_mark_left_edge
+    PAGE_WIDTH - MARGIN - LOGO_TILE_D
+  end
+
+  # A plain PNG on the navy masthead would nearly vanish: the mark's own ring color
+  # (#333895) measures 1.49:1 contrast against the masthead navy (#212355), well under
+  # the 3:1 floor this project holds every other mark to. White circle behind it, sized
+  # a few points larger than the mark, fixes that the same way the QR's own white
+  # background tile does on page 1, rather than recoloring campaign artwork no one here
+  # is authorized to redraw.
+  def draw_brand_mark(top:)
+    logo_d = LOGO_TILE_D - 10
+    cx = PAGE_WIDTH - MARGIN - (LOGO_TILE_D / 2)
+    cy = top - (LOGO_TILE_D / 2)
+
+    @pdf.fill_color "FFFFFF"
+    @pdf.fill_circle([cx, cy], LOGO_TILE_D / 2)
+
+    @pdf.image LOGO_PATH,
+               at: [cx - (logo_d / 2), cy + (logo_d / 2)],
+               width: logo_d,
+               height: logo_d
   end
 
   def draw_steps(top_y)

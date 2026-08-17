@@ -33,7 +33,7 @@ He's building a personal empire.
 ## masthead.dek
 
 Four committees. $5.3 million.
-A donor list that reaches from Midland oil money to Washington power brokers.
+A donor list that reaches from Midland oil money to Washington power brokers.\
 Here is where that money comes from, and where it actually goes.
 
 ## narrative.heading
@@ -48,9 +48,7 @@ THE STORY IN THREE NUMBERS
   committee.
   That one gift is practically equal to the amount every single other donor gave to his
   actual campaign committee, combined.
-- In March 2026 he personally bought stakes of **$15,001 to $50,000** in six companies,
-  three of them oil and gas, while sitting on the House committee that writes their rules.
-
+- In March 2026, Pfluger personally bought up to $50,000 worth of stock in each of six companies, three of them oil and gas, while sitting on the House committee that writes their rules.
 ## panel.spending.title
 
 Where the Money Actually Goes
@@ -139,9 +137,8 @@ Check Every Number Yourself
 
 ## verify.dek
 
-Federal law requires every campaign to publish who gives it money and how that money is
-spent. It is all free, all public, and it takes about five minutes to start browsing.
-Here is exactly how.
+Federal law requires every campaign to publish who gives it money and how that money is spent.\
+It's all free, all public, and it takes about five minutes to start browsing. Here's how.
 
 ## verify.steps
 
@@ -151,21 +148,21 @@ This is the Federal Election Commission, the government agency that collects cam
 finance filings. There is no login, no account, and no cost.
 Type "August Pfluger" into the search box at the top.
 
-### Find his committees
+### Find the committees
 
-A candidate can have several. He has four.
+A candidate can have several. August Pfluger has four.
 Three carry real money: his campaign committee, his "Pfluger Victory Fund" (which collects
 the largest checks), and his leadership PAC, "Raptor PAC." The fourth barely moved any
 money in this cycle.
 All four ID numbers are listed below, so you can go straight to any of them at
 fec.gov/data/committee/ plus the ID.
 
-### To see who gave him money, click "Receipts"
+### To see who donated money, click "Receipts"
 
 This lists every contribution above $200, with the donor's name, city, employer, and
 occupation. Use the filters to search a name or an employer.
 
-### To see what he spent it on, click "Disbursements"
+### To see what those donations were spent on, click "Disbursements"
 
 This lists every payment the campaign made: the vendor, the amount, the date, and what it
 was for. Search a business name to see every charge to it.
@@ -226,9 +223,7 @@ Look it up, and decide for yourself who will actually work for TX-11.
 Every figure on the front of this sheet comes from these public filings.
 Check any one of them, then visit claire11.org.
 
-Make a plan to vote. Early voting runs October 17 through 30, 2026.
-Election Day is November 3. Know your polling place and know when you are going.
-(Texas Election Code, Section 85.001.)
+Early voting runs October 17 through 30, 2026. Election Day is November 3 (Texas Election Code, Section 85.001). Make a plan to vote. Know your rights, know your polling place, and know when you are going.
 
 ## footer.disclaimer
 

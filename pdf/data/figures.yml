@@ -171,13 +171,18 @@ cited_in_copy:
       side by side read as confusing rather than as the point being made. If either
       figure is ever restated as a printed digit again, both must appear, since the
       claim is a comparison between them.
-  - figure: "$15,001 to $50,000 stakes in six companies, three of them oil and gas"
+  - figure: "up to $50,000 in stock in each of six companies, three of them oil and gas"
     slots: ["narrative.bullets"]
     source: >
       tx-11/august-pfluger/README.md — Takeaway 4 (Dorchester Minerals, Enterprise
       Products Partners, and Viper Energy among six March 2026 purchases; House Energy
-      and Commerce). These are the disclosure ranges House Ethics filings report, not
-      exact amounts, which is why no `exact` value is recorded here.
+      and Commerce). The report's own figure is a disclosure range, $15,001-$50,000,
+      not an exact amount, and that range applies to EACH of the six purchases
+      individually, not as a total across all six (so the real upper bound implied by
+      the source is closer to $300,000, not $50,000). "Up to $50,000" simplifies the
+      bullet to one number as requested, but only reads accurately alongside "each of
+      six companies" right next to it: drop that phrase and the sentence would wrongly
+      imply $50,000 was the combined total. Do not simplify further than this.
   - figure: "eight times more to other candidates than to ads; seven times more to fundraising"
     slots: ["panel.spending.caption"]
     source: >

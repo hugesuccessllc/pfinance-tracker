@@ -136,23 +136,33 @@ When source reports get refreshed with new data, update `data/figures.yml` and i
 rule applies to the sheet's own copy too: it should always read as a first-time
 statement of the current numbers, never as a changelog against a previous printing.
 
-### 5. Legal requirements, not design preferences
+### 5. One legal requirement, one firm design decision
 
-Two elements are compliance items and must not be "cleaned up" in a redesign:
+**The disclaimer is the actual FEC requirement, and must not be "cleaned up" in a
+redesign:** "Paid for by Claire Reynolds for Congress", at 8pt, inside a drawn box, on
+**both** pages. Handled by `draw_footer`, which is called on each page.
 
-- **"Paid for by Claire Reynolds for Congress"**, at 8pt, inside a drawn box, on **both**
-  pages. Handled by `draw_footer`, which is called on each page.
-- **The `https://claire11.org` QR code** appears **exactly once**, on page 1 only,
-  in the masthead. Drawn as vector squares (`lib/qr_helper.rb`) rather than an embedded
-  image so it stays sharp at any print resolution, with a 4-module white quiet zone so
-  scanners can find it.
+**The QR code and campaign logo are a design decision, not a law.** That distinction is
+worth being precise about, since an earlier version of this file bundled the two
+together under "legal requirements" when only the disclaimer actually is one. The QR
+originally appeared once, page 1 only, per the operator's original brief; it now
+appears on **both** pages, side by side with the logo in the top-right corner of each
+masthead, per the operator's later request for the two pages to mirror each other.
+Both are drawn by one shared method, `draw_corner_graphics`, called identically by
+`draw_masthead` and `draw_verify_masthead` with only `band_top` differing, so the two
+corners match by construction, not by two hand-tuned layouts that could quietly drift
+apart. The QR is vector squares (`lib/qr_helper.rb`), not an embedded image, so it
+stays sharp at any print resolution, with a 4-module white quiet zone so scanners can
+find it. If a future request changes this again, update this rule in the same commit,
+the way this paragraph replaced the "exactly once" version it superseded.
 
-Verify the QR actually resolves after any layout change. A QR that renders but does not
-decode is worse than none:
+Verify the QR actually resolves on **both** pages after any layout change. A QR that
+renders but does not decode is worse than none:
 
 ```bash
-pdftoppm -png -r 300 -f 1 -l 1 pdf/output/claire-reynolds-slicksheet.pdf /tmp/qr
+pdftoppm -png -r 300 pdf/output/claire-reynolds-slicksheet.pdf /tmp/qr
 zbarimg --quiet /tmp/qr-1.png     # expected: QR-Code:https://claire11.org
+zbarimg --quiet /tmp/qr-2.png     # expected: QR-Code:https://claire11.org
 ```
 
 ### 6. Use the campaign's colors
@@ -248,8 +258,8 @@ committed file actually matches the current `figures.yml`.
 ## Adding an image asset
 
 Drop the file in `assets/` and reference it from `build-slicksheet.rb` with
-`Prawn::Document#image`, the way `draw_brand_mark` does for the logo. Two things to
-check before trusting the result:
+`Prawn::Document#image`, the way `draw_corner_graphics` does for the logo. Two things
+to check before trusting the result:
 
 **Indexed-color PNGs render as visual noise, not a missing-image error.** Prawn's
 built-in PNG decoder does not handle color type 3 (indexed/palette) reliably. It does
@@ -278,8 +288,8 @@ check from rule 6 above to confirm nothing shifted.
 **Check contrast against whatever is behind it, the same as any other mark.** The
 logo's ring color measures 1.49:1 against the masthead navy, which is well under this
 project's 3:1 floor and would make it nearly disappear if drawn directly on that
-background. `draw_brand_mark` gives it a white circle tile for exactly this reason, the
-same fix the QR's own background tile already applies on page 1. To validate a new
+background. `draw_corner_graphics` gives it a white circle tile for exactly this
+reason, the same fix the QR's own background tile already applies. To validate a new
 placement the same way, load the `dataviz` skill and run its palette validator against
 the mark's color and whatever surface it sits on (see rule 7 above for how this project
 has used it): `validate_palette.js "<mark-hex>" --mode light --surface "<bg-hex>"`.
@@ -301,7 +311,7 @@ pdftotext $PDF - | grep -c "Paid for by"           # rule 5: expect 2
 
 pdftoppm -png -r 300 $PDF /tmp/qr
 zbarimg --quiet /tmp/qr-1.png                      # rule 5: the claire11.org URL
-zbarimg --quiet /tmp/qr-2.png                      # rule 5: expect no QR on page 2
+zbarimg --quiet /tmp/qr-2.png                      # rule 5: same, now on both pages
 
 # then look at it. None of the above catches a collision or a clipped label
 pdftoppm -png -r 110 $PDF /tmp/page
@@ -403,6 +413,9 @@ is here because the repo documents how its artifacts were produced. It is delibe
 > Take the campaign logo at images/circle-c.png, and incorporate it tastefully in the
 > PDF. Probably in one of the corners.
 
+> Let's do this, I want the QR code and the logo in the corner on both pages, just so
+> it looks symmetrical.
+
 **Decisions made during the build** that a future run should know about, since they
 came from reviewing rendered output rather than from the prompt:
 
@@ -439,3 +452,16 @@ came from reviewing rendered output rather than from the prompt:
   problem was visible from the source file alone. Both were caught by rendering the
   page and looking at it, not by any of the mechanical `pdftotext`/`pdfinfo` checks,
   which is exactly the gap "Verifying a build" above already warns those checks leave.
+- The single-placement logo decision two entries above this one was later reversed: the
+  QR and logo now appear together on both pages. That is a real, deliberate change to
+  what rule 5 used to call a legal requirement (it never fully was one; only the
+  disclaimer is FEC-mandated, the QR's frequency was always the operator's own call).
+  `draw_masthead` and `draw_verify_masthead` were refactored to call one shared
+  `draw_corner_graphics(band_top:)` method instead of each hand-rolling its own corner,
+  specifically so "the two pages match" is guaranteed by using the same code and the
+  same constants, not by two independently-tuned layouts a future edit could nudge out
+  of sync. Both graphics were resized down from their single-page versions (QR 62pt to
+  48pt, logo tile 54pt to 46pt) to fit page 2's shorter masthead band (78pt vs. page 1's
+  98pt); page 1 has slack to spare at the new size, but matching page 2's constraint on
+  both pages is what makes them read as a pair rather than two different treatments
+  that happen to occupy the same corner.

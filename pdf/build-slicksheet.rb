@@ -31,9 +31,10 @@ require_relative "lib/bootstrap"
 #     raises on one, so the rule holds even for text composed here at runtime rather
 #     than authored in the copy deck.
 #
-# Three elements are requirements, not design choices: the "Paid for by" disclaimer box
-# and the generated-on timestamp both appear on BOTH pages, and the claire11.org QR
-# code appears exactly ONCE (page 1 only).
+# Three elements are requirements, not design choices: the "Paid for by" disclaimer box,
+# the generated-on timestamp, and the claire11.org QR code + campaign logo cluster all
+# appear on BOTH pages, drawn identically via #draw_corner_graphics so the two mastheads
+# mirror each other by construction.
 
 require "prawn"
 require "yaml"
@@ -154,23 +155,7 @@ class SlickSheet
     @pdf.fill_color DEEP_NAVY
     @pdf.fill_rectangle([0, band_top], PAGE_WIDTH, band_h)
 
-    # QR sits in the masthead's right edge on a white tile — the tile doubles as the
-    # scanner quiet zone, so it's functional, not just a design flourish.
-    qr_size = 62.0
-    qr_x = PAGE_WIDTH - MARGIN - qr_size
-    qr_y = band_top - 15
-    draw_qr(@pdf, @f["footer"]["qr_target"], at: [qr_x, qr_y], size: qr_size)
-
-    @pdf.fill_color "FFFFFF"
-    text_box @c["footer.site"],
-                  at: [qr_x - 6, qr_y - qr_size - 1],
-                  width: qr_size + 12,
-                  height: 9,
-                  size: 6,
-                  align: :center,
-                  overflow: :shrink_to_fit
-
-    text_w = qr_x - MARGIN - 16
+    text_w = draw_corner_graphics(band_top: band_top) - MARGIN - 16
 
     @pdf.fill_color TINT_LIGHT
     text_box @c["masthead.eyebrow"],
@@ -433,12 +418,7 @@ class SlickSheet
     draw_footer(page_one: false)
   end
 
-  # Page 1's masthead corner is spoken for by the QR code (rule 5: exactly once, page 1
-  # only). Page 2's matching corner had nothing in it, so the campaign mark goes there.
-  # This mirrors page 1's own layout rather than inventing a new one: one graphic, top
-  # right, white circle behind it, page text reflowed to leave it room.
   LOGO_PATH = File.expand_path("assets/circle-c.png", __dir__)
-  LOGO_TILE_D = 54.0
 
   def draw_verify_masthead
     band_top = PAGE_HEIGHT
@@ -447,8 +427,7 @@ class SlickSheet
     @pdf.fill_color DEEP_NAVY
     @pdf.fill_rectangle([0, band_top], PAGE_WIDTH, band_h)
 
-    draw_brand_mark(top: band_top - 14)
-    text_w = brand_mark_left_edge - MARGIN - 16
+    text_w = draw_corner_graphics(band_top: band_top) - MARGIN - 16
 
     @pdf.fill_color TINT_LIGHT
     text_box @c["verify.eyebrow"],
@@ -481,32 +460,52 @@ class SlickSheet
     band_top - band_h
   end
 
-  # Left edge of the brand mark's white tile, in absolute page coordinates. Text boxes
-  # reserve up to here, the same way page 1's masthead reserves up to the QR's own left
-  # edge, so a copy edit that lengthens verify.headline gets caught by overflow rather
-  # than drawing under the logo.
-  def brand_mark_left_edge
-    PAGE_WIDTH - MARGIN - LOGO_TILE_D
-  end
+  CORNER_QR_SIZE = 48.0
+  CORNER_LOGO_TILE_D = 46.0
+  CORNER_GAP = 8.0
 
-  # A plain PNG on the navy masthead would nearly vanish: the mark's own ring color
-  # (#333895) measures 1.49:1 contrast against the masthead navy (#212355), well under
-  # the 3:1 floor this project holds every other mark to. White circle behind it, sized
-  # a few points larger than the mark, fixes that the same way the QR's own white
-  # background tile does on page 1, rather than recoloring campaign artwork no one here
-  # is authorized to redraw.
-  def draw_brand_mark(top:)
-    logo_d = LOGO_TILE_D - 10
-    cx = PAGE_WIDTH - MARGIN - (LOGO_TILE_D / 2)
-    cy = top - (LOGO_TILE_D / 2)
+  # Draws the QR code and the campaign logo side by side in the top-right corner. Called
+  # identically by both mastheads (only band_top differs) so the two pages mirror each
+  # other by construction, not by two hand-tuned layouts that could quietly drift apart.
+  # Sized to fit page 2's masthead, the shorter of the two bands (78pt) — page 1's taller
+  # band (98pt) has slack to spare, but using one size on both is what makes them read as
+  # a matched pair rather than two different treatments that happen to sit in the same
+  # corner. Returns the cluster's left edge, in absolute page coordinates, so callers can
+  # reserve text width up to it the same way a copy edit that overflows gets caught
+  # instead of silently drawing under the graphics.
+  def draw_corner_graphics(band_top:)
+    inset = 14.0
+    qr_x = PAGE_WIDTH - MARGIN - CORNER_QR_SIZE
+    qr_y = band_top - inset
+    qr_center_y = qr_y - (CORNER_QR_SIZE / 2)
+
+    draw_qr(@pdf, @f["footer"]["qr_target"], at: [qr_x, qr_y], size: CORNER_QR_SIZE)
 
     @pdf.fill_color "FFFFFF"
-    @pdf.fill_circle([cx, cy], LOGO_TILE_D / 2)
+    text_box @c["footer.site"],
+                  at: [qr_x - 6, qr_y - CORNER_QR_SIZE - 1],
+                  width: CORNER_QR_SIZE + 12,
+                  height: 9,
+                  size: 6,
+                  align: :center,
+                  overflow: :shrink_to_fit
 
+    # A plain PNG on the navy masthead would nearly vanish: the mark's own ring color
+    # (#333895) measures 1.49:1 contrast against the masthead navy (#212355), well under
+    # the 3:1 floor this project holds every other mark to. White circle tile fixes that,
+    # the same way the QR's own white background does, rather than recoloring campaign
+    # artwork no one here is authorized to redraw.
+    logo_cx = qr_x - CORNER_GAP - (CORNER_LOGO_TILE_D / 2)
+    logo_d = CORNER_LOGO_TILE_D - 10
+
+    @pdf.fill_color "FFFFFF"
+    @pdf.fill_circle([logo_cx, qr_center_y], CORNER_LOGO_TILE_D / 2)
     @pdf.image LOGO_PATH,
-               at: [cx - (logo_d / 2), cy + (logo_d / 2)],
+               at: [logo_cx - (logo_d / 2), qr_center_y + (logo_d / 2)],
                width: logo_d,
                height: logo_d
+
+    logo_cx - (CORNER_LOGO_TILE_D / 2)
   end
 
   def draw_steps(top_y)
@@ -759,7 +758,8 @@ class SlickSheet
   # Two things here are requirements rather than design choices. The disclaimer box is
   # a legal one: 8pt, boxed, on BOTH pages. The generated-on stamp is a practical one,
   # so anyone holding a printed copy can tell which run it came from and whether newer
-  # filings have landed since. The QR code is page 1 only and lives in that masthead.
+  # filings have landed since. The QR code lives in each page's own masthead, drawn by
+  # #draw_corner_graphics, not here.
   def draw_footer(page_one:)
     @pdf.stroke_color HAIRLINE
     @pdf.line_width HAIRLINE_WIDTH

@@ -114,7 +114,7 @@ Piped In, Not From Here
 
 ## panel.geography.subtitle
 
-Out-of-state money has taken over his campaign since his first race.
+Out-of-state contributions have taken over his campaign since his first race.
 
 ## panel.geography.stat_label
 

@@ -17,8 +17,9 @@
 #
 # Everything above the first `##` heading is operator documentation and is ignored.
 #
-# Markdown conventions handled: `**bold**` becomes Prawn's `<b>` inline-format tag, and
-# straight quotes become typographic quotes so the operator never has to type them.
+# Markdown conventions handled: `**bold**` becomes Prawn's `<b>` inline-format tag,
+# straight quotes become typographic quotes so the operator never has to type them, and
+# a line ending in a backslash forces a line break (see #collapse_softwraps below).
 class CopyDeck
   # The rule this class exists to enforce mechanically rather than by good intentions:
   # an em-dash reads as lazy AI authorship to a lot of people, so none may reach the
@@ -100,7 +101,35 @@ class CopyDeck
   # Joins wrapped lines back into flowing prose. The markdown file wraps at ~90 columns
   # for readable diffs; those newlines are an artifact of the file, not of the copy.
   def paragraph(text)
-    inline(text.strip.split(/\n{2,}/).map { |para| para.gsub(/\s*\n\s*/, " ").strip }.join("\n\n"))
+    inline(text.strip.split(/\n{2,}/).map { |para| collapse_softwraps(para) }.join("\n\n"))
+  end
+
+  # A line ending in a backslash is different from ordinary word-wrap: that is an
+  # intentional break the operator asked for (a headline split across two lines, say),
+  # so it survives as a real single newline instead of collapsing to a space like every
+  # other newline in the file does.
+  #
+  # Prawn renders a single "\n" as one line break, and "\n\n" (an actual blank line
+  # between two `##` slots) as a break plus a blank line — measured, not assumed:
+  # dry-rendering "a\nb" came out to 33.3pt (two lines) against "a\n\nb" at 51.8pt (two
+  # lines plus a blank one), same width and size. So a forced break is implemented as a
+  # trailing backslash, never as "just leave a blank line in the markdown" — that would
+  # visibly add more gap than a headline break should have.
+
+  # The sentinel below has to be a character that cannot occur in authored copy, or the
+  # final restore step would corrupt every other occurrence of it in the paragraph, not
+  # just the forced break. Built from its numeric codepoint (Unicode Private Use Area,
+  # never a real printable character) rather than pasted into this file as a literal
+  # byte, which has silently corrupted this exact line before when edited by hand.
+  # Verify after touching it: the build below fails loudly if this ever regresses.
+  HARD_BREAK_SENTINEL = 0xE000.chr(Encoding::UTF_8)
+
+  def collapse_softwraps(para)
+    para
+      .strip
+      .gsub(/[ \t]*\\\n[ \t]*/, HARD_BREAK_SENTINEL) # mark an intentional \-break
+      .gsub(/\s*\n\s*/, " ")                         # collapse plain word-wrap to a space
+      .gsub(HARD_BREAK_SENTINEL, "\n")               # restore the intentional break
   end
 
   def inline(text)

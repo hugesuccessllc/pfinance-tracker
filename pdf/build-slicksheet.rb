@@ -379,7 +379,7 @@ class SlickSheet
     # the panel subtitle already says what the number measures; repeating it here only
     # pushed the bars down into the caption.
     stat_tile(@pdf,
-              value: "#{data['pct_contributions_out_of_state']}%",
+              value: "#{data['pct_contributions_out_of_state_2026']}%",
               label: @c["panel.geography.stat_label"],
               at: [x, content_y - 2],
               width: inner_w,

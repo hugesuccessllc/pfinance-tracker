@@ -84,9 +84,18 @@ infographic_3:
   total_2026: 583137.27
 
 infographic_4:
-  source: "tx-11/august-pfluger/reports/2026-outside-texas.md"
-  pct_contributions_out_of_state: 67.6
-  pct_dollars_out_of_state: 26.8
+  source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle"
+  # Both figures are the same metric (share of CONTRIBUTION COUNT, not dollars) in two
+  # different cycles, which is what makes them comparable. Report's cycle-by-cycle table:
+  # 2020 was 15.4% of dollars / 14.8% of count; 2026 is 33.4% of dollars / 84.4% of count.
+  # Do not swap either side for the dollar-share figures without relabeling the panel.
+  #
+  # The report's other headline number, 67.6% (the all-time, all-cycles-combined share
+  # of every contribution since 2019), is deliberately not shown anywhere on this panel.
+  # It answers a different question (career-to-date average) than "how has this changed
+  # since his first race," and showing 67.6% next to 84.4% invited a reader to compare
+  # them as if they were the same kind of number, which they are not.
+  pct_contributions_out_of_state_2020: 14.8
   pct_contributions_out_of_state_2026: 84.4
   # Full names, not postal abbreviations, per the operator's request; the panel has
   # room. This is a naming expansion, not a computed figure: DC/VA/CA to their
@@ -199,9 +208,12 @@ cited_in_copy:
       report does not break this vendor out by cycle, so the copy says "since 2020"
       rather than implying it is a single-cycle figure. Do not restate it as this-cycle
       without first publishing a per-cycle number in that report.
-  - figure: "84.4% of contributions from outside Texas this cycle"
-    slots: ["panel.geography.stat_label"]
-    source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle"
-  - figure: "14.8% of contributions from outside Texas in his first race"
+  - figure: "14.8% (his 2020 first race) compared to 84.4% (2026) of contributions from
+      outside Texas, both a share of CONTRIBUTION COUNT, not dollars"
     slots: ["panel.geography.caption"]
-    source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle (2020)"
+    source: "tx-11/august-pfluger/reports/2026-outside-texas.md — The trend, cycle by cycle"
+    note: >
+      The 84.4% figure also appears as the panel's giant stat-tile number, but that comes
+      straight from infographic_4.pct_contributions_out_of_state_2026 in this file, not
+      from typed copy, so it does not need its own separate ledger entry the way a number
+      embedded in prose does.

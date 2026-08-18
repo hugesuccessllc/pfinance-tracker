@@ -214,6 +214,39 @@
 #      Receipts-page "raw data" button was ever clicked, never the Disbursements page's) will
 #      simply have no Schedule B gap rows to add — this is a Step 1 collection gap, not
 #      something Step 2 can infer or fill in.
+#
+#   9. Some committees are financially connected to the candidate but are NOT one of their
+#      own — e.g. an externally-run, multi-candidate joint fundraising committee (JFC) that
+#      earmarks money to the candidate's principal committee or leadership PAC, the kind
+#      gotcha 7's "Transfers from authorized committees" breakout surfaces by name. Once
+#      identified, downloading that committee's own itemized data is worthwhile: it surfaces
+#      the real donors behind an earmarked line, and can reveal OTHER earmarked transfers to
+#      the candidate's committees that gotcha 7's manual breakout never went looking for —
+#      e.g. on August Pfluger's 2026 data, pulling the American Battleground Fund (ABF) not
+#      only named the donors behind its $91,128.90 to his principal committee, it also
+#      surfaced a second, separate $91,413.60 stream from ABF to Raptor PAC that no amount
+#      of staring at the principal committee's own Schedule A would have shown.
+#
+#      But it is NOT one of the candidate's own committees: most of what it raises and
+#      spends serves OTHER candidates the JFC also participates in (ABF's 2026 data shows
+#      $1.32M raised and disbursements to ~30 other candidates' committees, against only
+#      ~$182K that reached Pfluger's own two). Folding it into `committees` the normal way
+#      would inflate "money raised for this candidate" and "this candidate's committees'
+#      spending" with money that has nothing to do with them.
+#
+#      Mark such a directory by dropping an empty `CONNECTED` file in it — same one-word-
+#      empty-file convention as fec-api-client.rb's own `PRINCIPAL` marker, but unlike
+#      PRINCIPAL (which that tool only writes for human/LLM reference — nothing here reads
+#      it), CONNECTED IS read by this script: `committees` excludes any CONNECTED-marked
+#      directory from every itemized donor/disbursement total above, and
+#      `connected_committees` picks it up instead for its own, separate report section
+#      (render_connected_committees). That section reports two things: the committee's own
+#      itemized receipts (context on how big it is — NOT added to this candidate's donor
+#      totals) and specifically how much it sent to each of the candidate's OWN committees
+#      (cross-referenced by recipient_committee_id against `committees`, the number that
+#      actually matters here). This is a deliberately lighter pass than the main donor/
+#      disbursement pipeline — no efile gap-filling, no cap-check — proportionate to its
+#      role as supplementary context rather than a primary total this report leans on.
 
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
@@ -286,7 +319,24 @@ class FecAnalyzer
   INDIVIDUAL_PER_ELECTION_LIMIT = BigDecimal("3500")
   MULTICANDIDATE_PAC_PER_ELECTION_LIMIT = BigDecimal("5000")
 
-  Committee = Struct.new(:id, :name, :dir)
+  # See gotcha 9: an empty file by this name in a committee's fec/<id>/ directory marks it
+  # as financially connected to the candidate but NOT one of their own committees — read by
+  # `committees` (to exclude it) and `connected_committees` (to pick it up instead).
+  CONNECTED_MARKER = "CONNECTED".freeze
+
+  # Role markers for committees the candidate DOES own/control — same empty-file convention.
+  # PRINCIPAL is written automatically by fec-api-client.rb's --principal flag; OWNED is the
+  # same idea applied by hand to the candidate's other own committees (a leadership PAC, a
+  # JFC they're a named participant in) — the ones definitely NOT getting a CONNECTED marker,
+  # made explicit rather than left as "no marker means owned, by default." Neither changes
+  # which committees `committees` aggregates (that's still "no CONNECTED marker" — see
+  # gotcha 9); both are purely a role label, read by committee_role below to annotate report
+  # output (see print_committee_totals) so a reader doesn't have to hold the candidate's
+  # committee structure in their head to tell PRINCIPAL from JFC/PAC from CONNECTED.
+  PRINCIPAL_MARKER = "PRINCIPAL".freeze
+  OWNED_MARKER = "OWNED".freeze
+
+  Committee = Struct.new(:id, :name, :dir, :role)
 
   def initialize(fec_dir, top: 15, cycle: nil, by_cycle: false, min_amount: nil, donor_type: nil, by_state: false, refunds: false)
     @fec_dir = fec_dir
@@ -302,12 +352,23 @@ class FecAnalyzer
   # Only committees with itemized schedule_a/b data — a committee downloaded via
   # --with-affiliated has just a totals.json (see affiliated_committees below) and
   # would otherwise show up here with a misleading $0.00 in every itemized total.
+  # CONNECTED-marked committees are also excluded here — see gotcha 9 and
+  # connected_committees below.
   def committees
     @committees ||= Dir.children(@fec_dir)
                         .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                        .reject { |d| File.exist?(File.join(@fec_dir, d, CONNECTED_MARKER)) }
                         .select { |d| Dir.glob(File.join(@fec_dir, d, "schedule_*.csv")).any? }
                         .sort
-                        .map { |id| Committee.new(id, committee_name_for(id), File.join(@fec_dir, id)) }
+                        .map { |id| Committee.new(id, committee_name_for(id), File.join(@fec_dir, id), committee_role(id)) }
+  end
+
+  # "principal" / "owned" / nil (no marker present) — see PRINCIPAL_MARKER/OWNED_MARKER.
+  # PRINCIPAL wins if a directory somehow carries both.
+  def committee_role(id)
+    return "principal" if File.exist?(File.join(@fec_dir, id, PRINCIPAL_MARKER))
+    return "owned" if File.exist?(File.join(@fec_dir, id, OWNED_MARKER))
+    nil
   end
 
   # Committees downloaded via --with-affiliated: financial totals only, no itemized
@@ -321,10 +382,23 @@ class FecAnalyzer
                                    .map { |id| load_affiliated_totals(id) }
   end
 
+  # Committees marked CONNECTED (see gotcha 9): itemized data exists and is read, but kept
+  # out of `committees` and every itemized donor/disbursement total that iterates over it.
+  # Reported separately via analyze_connected_committees/render_connected_committees.
+  def connected_committees
+    @connected_committees ||= Dir.children(@fec_dir)
+                                  .select { |d| d =~ /\AC\d{6,}\z/ && File.directory?(File.join(@fec_dir, d)) }
+                                  .select { |d| File.exist?(File.join(@fec_dir, d, CONNECTED_MARKER)) }
+                                  .select { |d| Dir.glob(File.join(@fec_dir, d, "schedule_*.csv")).any? }
+                                  .sort
+                                  .map { |id| Committee.new(id, committee_name_for(id), File.join(@fec_dir, id), "connected") }
+  end
+
   def run
     if @by_cycle || @cycle
-      result = { committees: committees.map { |c| { id: c.id, name: c.name } },
+      result = { committees: committees.map { |c| { id: c.id, name: c.name, role: c.role } },
                  affiliated_committees: affiliated_committees,
+                 connected_committees: analyze_connected_committees(cycle: @cycle),
                  transfer_recipients: analyze_transfer_recipients,
                  cycle_integrity: cycle_integrity_check,
                  efile_gaps: efile_gaps(cycle: @cycle) }
@@ -344,8 +418,9 @@ class FecAnalyzer
       result
     else
       {
-        committees: committees.map { |c| { id: c.id, name: c.name } },
+        committees: committees.map { |c| { id: c.id, name: c.name, role: c.role } },
         affiliated_committees: affiliated_committees,
+        connected_committees: analyze_connected_committees(cycle: @cycle),
         transfer_recipients: analyze_transfer_recipients,
         efile_gaps: efile_gaps(cycle: @cycle),
         donors: analyze_donors,
@@ -385,6 +460,7 @@ class FecAnalyzer
 
     render_efile_gaps(io, data[:efile_gaps])
     render_affiliated_committees(io, data[:affiliated_committees])
+    render_connected_committees(io, data[:connected_committees])
     render_transfer_recipients(io, data[:transfer_recipients])
 
     if data[:by_cycle]
@@ -1159,6 +1235,71 @@ class FecAnalyzer
           .map { |id, total| meta[id].merge(committee_id: id, total: total) }
   end
 
+  # See gotcha 9. For each CONNECTED-marked committee: its own itemized receipts (DONOR_LABELS
+  # scope, same definition analyze_donors uses, so it's directly comparable — but reported
+  # separately, never summed into this candidate's own donor totals) plus, specifically, how
+  # much it disbursed to each of the candidate's OWN committees (cross-referenced by
+  # recipient_committee_id against `committees`, not by name — IDs are unambiguous where
+  # filer-supplied name text isn't). That second number is the actual reason to collect this
+  # data: it's the itemized detail behind whatever earmarked line gotcha 7 found on the
+  # candidate's own Schedule A, plus a chance to catch a stream gotcha 7 didn't.
+  #
+  # Deliberately lighter-weight than analyze_donors/analyze_disbursements: no efile
+  # gap-filling, no cap-check. This is supplementary context, not a primary total the rest of
+  # the report depends on being airtight — see gotcha 9.
+  def analyze_connected_committees(cycle: @cycle)
+    owned_ids = committees.map(&:id).to_set
+
+    connected_committees.map do |committee|
+      own_receipts = BigDecimal(0)
+      donor_totals = Hash.new(BigDecimal(0))
+      donor_meta = {}
+
+      load_rows(committee, "schedule_a").each do |row|
+        next if row["memo_code"] == "X"
+        next unless DONOR_LABELS.include?(row["line_number_label"].to_s.strip)
+        next unless cycle_matches?(row, cycle)
+
+        amount = decimal(row["contribution_receipt_amount"])
+        own_receipts += amount
+
+        name = row["contributor_name"].to_s.strip
+        next if name.empty?
+        key = [name.upcase, row["contributor_employer"].to_s.strip.upcase]
+        donor_totals[key] += amount
+        donor_meta[key] ||= { name: name, employer: row["contributor_employer"].to_s.strip,
+                               city: row["contributor_city"].to_s.strip, state: row["contributor_state"].to_s.strip }
+      end
+
+      sent_to_owned = Hash.new(BigDecimal(0))
+      sent_meta = {}
+
+      load_rows(committee, "schedule_b").each do |row|
+        next if row["memo_code"] == "X"
+        next unless cycle_matches?(row, cycle)
+        recipient_id = row["recipient_committee_id"].to_s.strip
+        next unless owned_ids.include?(recipient_id)
+
+        sent_to_owned[recipient_id] += decimal(row["disbursement_amount"])
+        sent_meta[recipient_id] ||= row["recipient_name"].to_s.strip
+      end
+
+      {
+        id: committee.id,
+        name: committee.name,
+        own_receipts_total: own_receipts,
+        top_donors: donor_totals.select { |_k, v| v > 0 }
+                                 .sort_by { |_k, v| -v }
+                                 .first(@top)
+                                 .map { |key, total| donor_meta[key].merge(total: total) },
+        sent_to_owned_committees: sent_to_owned.select { |_k, v| v > 0 }
+                                                .sort_by { |_k, v| -v }
+                                                .map { |id, total| { committee_id: id, committee_name: sent_meta[id], total: total } },
+        total_sent_to_owned: sent_to_owned.values.sum(BigDecimal(0))
+      }
+    end
+  end
+
   def analyze_disbursements(cycle: @cycle)
     category_totals = Hash.new(BigDecimal(0))
     category_counts = Hash.new(0)
@@ -1308,6 +1449,29 @@ class FecAnalyzer
     io.puts
   end
 
+  def render_connected_committees(io, list)
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "CONNECTED COMMITTEES (marked CONNECTED — financially tied to the candidate but " \
+            "NOT one of their own; itemized here for context, NOT folded into the Key Donors/ " \
+            "disbursement totals above, since most of their money serves other candidates too " \
+            "— see gotcha 9)"
+    io.puts "=" * 80
+    list.each do |c|
+      io.puts "#{c[:name]} [#{c[:id]}]: #{money(c[:own_receipts_total])} raised (all recipients, not just this candidate)"
+      io.puts "  Sent to this candidate's own committees: #{money(c[:total_sent_to_owned])}"
+      c[:sent_to_owned_committees].each do |s|
+        io.puts "    -> #{s[:committee_name]} [#{s[:committee_id]}]: #{money(s[:total])}"
+      end
+      if c[:top_donors].any?
+        io.puts "  Top donors to this committee (context only — not specific to this candidate):"
+        c[:top_donors].each { |d| io.puts "    #{d[:name]} (#{d[:employer]}, #{d[:city]}, #{d[:state]}): #{money(d[:total])}" }
+      end
+      io.puts
+    end
+  end
+
   def render_transfer_recipients(io, list)
     return if list.nil? || list.empty?
 
@@ -1345,7 +1509,8 @@ class FecAnalyzer
     io.puts title
     io.puts "=" * 80
     committees.each do |c|
-      io.puts "#{c.name} [#{c.id}]: #{money(totals[c.id])}"
+      tag = c.role ? " (#{c.role})" : ""
+      io.puts "#{c.name} [#{c.id}]#{tag}: #{money(totals[c.id])}"
     end
   end
 

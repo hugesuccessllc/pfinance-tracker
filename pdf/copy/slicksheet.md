@@ -27,8 +27,8 @@ FOLLOW THE MONEY  ·  TEXAS' 11TH CONGRESSIONAL DISTRICT
 
 ## masthead.headline
 
-Everyone got a piece of August Pfluger's millions.\
-Everyone except the people of TX-11.
+Pfluger's priority isn't TX-11.\
+It's the DC fundraising circuit.
 
 ## masthead.dek
 

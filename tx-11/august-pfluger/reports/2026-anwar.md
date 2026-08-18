@@ -20,6 +20,13 @@ $310,000 on March 16, 2026. The next day, the committee transferred exactly $310
 NRCC, split into three tranches that match the per-donor ceilings for a national party
 committee's three accounts almost to the dollar.
 
+That NRCC money is not, by and large, money that can fund a House race. Two of the three
+tranches — roughly 83% of everything that went to the NRCC across both checks — landed in
+accounts national party committees may use only for a headquarters building or for legal and
+recount proceedings, not for candidates. Only the smaller, main-account slice is unrestricted
+party money that could plausibly reach a campaign, and this repository has no NRCC filings to
+confirm whether it did.
+
 ## The two checks
 
 Both are non-memo, itemized receipts to the Pfluger Victory Fund (C00753913). Neither was
@@ -54,7 +61,12 @@ caps with a single February 2025 check, nearly a year before the primary.
 
 The $5,000 to Raptor PAC is Pfluger's leadership PAC. A leadership PAC is legally barred from
 spending on its own sponsor's race; it exists to give to other candidates. That money is real,
-and it buys influence, but it cannot appear in a Pfluger campaign ad.
+and it buys influence, but it cannot appear in a Pfluger campaign ad. Raptor PAC's own 2026
+Schedule B shows this isn't theoretical: the committee disbursed $1,021,119.77 this cycle to
+243 distinct recipient committees, almost entirely other House campaigns, in checks of
+$5,000–$10,000 apiece — Ashley Hinson, Miller-Meeks, Kean, Celeste, Alfonso, Huizenga, and
+dozens more. Unlike the NRCC money below, this $5,000 genuinely does end up spread across
+other GOP races.
 
 The **March 2026 check produced no attribution rows at either committee.** Anwar was already
 maxed out to the campaign, and Raptor PAC's 2026 slot went to a different family member.
@@ -85,7 +97,12 @@ Four things make this a pass-through rather than a coincidence:
    split by formula, not many donors' money being swept.
 
 Anwar's $310,000 was, in effect, a contribution to the national House campaign arm that
-happened to be solicited by August Pfluger's fundraising vehicle.
+happened to be solicited by August Pfluger's fundraising vehicle — though "campaign arm" is
+generous for most of it. The $44,300 main-account tranche is unrestricted party money, the
+kind that can fund ads, coordinated spending, or independent expenditures in a House race.
+The two $132,900 tranches are not: FEC rules restrict a national party committee's additional
+accounts to its headquarters building fund and its legal/recount proceedings fund. $265,700 of
+this single check — 86% of it — was legally barred from ever reaching a candidate.
 
 ## Where the rest of the money went
 
@@ -134,7 +151,28 @@ ceilings, but this is arithmetic reconstruction, not disclosure:
 The NRCC portion is the whole reason the check is the size it is: $44,300 + $132,900 + $132,900
 = $310,100, a single donor's maximum annual exposure to one national party committee. Add the
 $7,000 campaign maximum, the $5,000 leadership PAC maximum, and $10,000 more, and you land on
-$332,100 exactly. Treat the last three rows as a plausible fit rather than a finding.
+$332,100 exactly. Treat the last three rows as a plausible fit rather than a finding. The same
+main-vs-additional-account split applies here as in the March check: of this reconstructed
+$310,100, only $44,300 is unrestricted party money — the remaining $265,800 is, by the same FEC
+account rules, restricted to the NRCC's building and legal funds.
+
+## Where the whole $642,100 actually lands, roughly
+
+Putting the confirmed, traced, and reconstructed pieces together — this is an eyeballed
+summary of everything above, not a new calculation:
+
+| Destination | Amount | Share | Can it fund a House race? |
+|---|---:|---:|---|
+| Pfluger's own campaign | $7,000 | ~1% | Yes — his race specifically |
+| Raptor PAC → ~243 other GOP campaigns | $5,000 | ~1% | Yes — confirmed, genuinely diffused |
+| NRCC main account (both checks) | $88,600 | ~14% | Plausibly — no NRCC filings here to confirm |
+| NRCC building/legal accounts (both checks) | $531,500 | ~83% | **No** — restricted by law to real estate and litigation |
+| Unaccounted | $10,000 | ~2% | Unknown |
+
+The headline comparison this report opened with — Anwar's giving against every direct donor to
+the campaign — is about a check that, once split by formula and by restricted-account rules,
+barely touches the campaign at all. Most of it isn't diffused into other candidates' races
+either. It funds the national party's own infrastructure.
 
 ## Caveats
 
@@ -151,6 +189,12 @@ $332,100 exactly. Treat the last three rows as a plausible fit rather than a fin
 - **Family giving is out of scope.** This report follows Syed Javaid Anwar. Other Anwars appear
   in the same filings, including through a partnership contribution attributed to individual
   partners, and are not counted in any total above.
+- **The NRCC main-account slice's ultimate use is unconfirmed.** $88,600 across both checks
+  landed in an unrestricted party account; this repository holds no NRCC Schedule B to show
+  what it was spent on. The $531,500 in the two additional-account tranches is restricted by
+  FEC rule to headquarters-building and legal/recount expenses regardless of destination
+  filings, so that portion's exclusion from candidate spending doesn't depend on NRCC data
+  this repository lacks.
 - **One connected committee is excluded.** Committee C00857649 is marked `CONNECTED` and is
   held out of this report per this repository's standing convention. It records no 2026-cycle
   contributions from Syed Javaid Anwar, so its exclusion does not affect the trace.
@@ -201,4 +245,10 @@ which is the signature of manual rather than `fec-api-client.rb` collection), ti
 $3,500 per election to a candidate committee, $5,000 per calendar year to a multicandidate PAC,
 $44,300 per calendar year to a national party committee's main account, and $132,900 per
 calendar year to each additional national party account. These are external to the CSV data and
-were not derived from it.
+were not derived from it. The additional accounts' restricted purpose — headquarters building
+and legal/recount proceedings, not candidate spending — is likewise sourced from published FEC
+guidance on those accounts, not from anything in this repository's data.
+
+**Raptor PAC's 243-recipient figure** (used above to distinguish its $5,000 slice from the
+NRCC money) comes from that committee's own `schedule_b-*.csv` for the 2026 cycle, non-memo
+rows with a `recipient_committee_id` present, same scoping this report uses elsewhere.

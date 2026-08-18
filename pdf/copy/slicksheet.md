@@ -28,7 +28,7 @@ FOLLOW THE MONEY  ·  TEXAS' 11TH CONGRESSIONAL DISTRICT
 ## masthead.headline
 
 August Pfluger isn't fighting for TX-11.\
-He's building a personal empire.
+He's hustling for checks.
 
 ## masthead.dek
 
@@ -44,7 +44,7 @@ THE STORY IN THREE NUMBERS
 
 - **$5.3 million** raised across four separate committees in this cycle alone.
   That is a war chest built to entrench a career, not to fight for one election.
-- A single Midland oil executive gave **$642,100** through Pfluger's joint fundraising
+- A single Midland oil executive, Syed Javaid Anwar, gave **$642,100** through Pfluger's joint fundraising
   committee.
   That one gift is practically equal to the amount every single other donor gave to his
   actual campaign committee, combined.

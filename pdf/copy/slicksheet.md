@@ -44,7 +44,7 @@ THE STORY IN THREE NUMBERS
 
 - **$5.3 million** raised across four separate committees in this cycle alone.
   That is a war chest built to entrench a career, not to fight for one election.
-- A single Midland oil executive, Syed Javaid Anwar, gave the Pfluger Victory Fund **$642,100** this election cycle. That equals, almost to the dollar, the total given by every individual donor to August Pfluger for Congress.
+- A single Midland oil executive, Syed Javaid Anwar, gave the Pfluger Victory Fund **$642,100** this election cycle. That equals, almost to the dollar, the total given by every donor to August Pfluger for Congress.
 - In March 2026, Pfluger personally bought up to **$50,000** worth of stock in each of six companies, three of them oil and gas, while sitting on the House committee that writes their rules.
 ## panel.spending.title
 

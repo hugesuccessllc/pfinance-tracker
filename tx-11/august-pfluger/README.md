@@ -45,7 +45,7 @@ Beyond the card breakdown, the Pfluger Victory Fund also cut direct, non-memo ch
 
 1. **This is a leadership-building operation, not a persuasion campaign.** Just $133,299.71 in advertising all cycle, against $1,067,500.00 in political contributions to other Republicans and $638,886.02 transferred to the NRCC. Pfluger — chair of the Republican Study Committee — is spending like a member cultivating chits across the conference rather than one bracing for a competitive race, even in a cycle when his redrawn district newly reaches into Austin's northern suburbs.
 
-2. **A single Midland oilman outweighs the entire direct-donor campaign.** Syed Javaid Anwar's $642,100 (routed through the Pfluger Victory Fund) is equal to the principal campaign raised from every donor combined ($642,408.43, just $300 shy). When one donor's giving approaches your entire direct fundraising base, that relationship, not the base, is the financial foundation.
+2. **A single Midland oilman matches the entire direct-donor campaign.** Syed Javaid Anwar's $642,100 (routed through the Pfluger Victory Fund) is equal to the principal campaign raised from every donor combined ($642,408.43, just $300 shy). When one donor's giving approaches your entire direct fundraising base, that relationship, not the base, is the financial foundation.
 
 3. **The funding isn't limited to Pfluger's own JFC.** A second, externally-run joint fundraising committee — the American Battleground Fund — passed at least $91,128.90 in earmarked contributions to the campaign this cycle. That committee isn't collected here, so its own donor list (who actually wrote the underlying checks) is invisible in this report; see "Suggested Committees" below.
 

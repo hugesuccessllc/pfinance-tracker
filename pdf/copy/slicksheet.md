@@ -101,7 +101,7 @@ this cycle alone.
 
 The venues tell the story.
 A Deer Valley ski lodge, the Ritz-Carlton, a private golf club with a $150,000 initiation
-fee, and 125 visits to a single upscale steakhouse chain, The Capital Grille. (To be fair, he did spend $756.42 at the Springhill Restaurant during his single visit to Pflugerville in 2025.)
+fee, and 125 visits to a single upscale steakhouse chain, The Capital Grille. (To be fair, Pfluger did spend $756.42 at the Springhill Restaurant during his single visit to Pflugerville in 2025.)
 
 ## panel.geography.title
 
@@ -109,7 +109,7 @@ Piped In, Not From Here
 
 ## panel.geography.subtitle
 
-Out-of-state contributions have taken over his campaign since his first race.
+Out-of-state contributions have taken over Pfluger's campaign since his first race.
 
 ## panel.geography.stat_label
 
@@ -121,8 +121,7 @@ TOP OUT-OF-STATE SOURCES, BY DOLLARS RAISED
 
 ## panel.geography.caption
 
-In his first race, just 14.8% of contributions came from outside Texas. This cycle,
-it's 84.4%.
+In Pfluger's first race, just 14.8% of contributions came from outside Texas. This cycle, it's 84.4%.
 
 ## verify.eyebrow
 

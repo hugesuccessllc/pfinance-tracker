@@ -27,8 +27,8 @@ FOLLOW THE MONEY  ·  TEXAS' 11TH CONGRESSIONAL DISTRICT
 
 ## masthead.headline
 
-August Pfluger isn't fighting for TX-11.\
-He's hustling for checks.
+Everyone got a piece of August Pfluger's millions.\
+Everyone except the people of TX-11.
 
 ## masthead.dek
 
@@ -240,4 +240,4 @@ Turn over to check these numbers yourself.
 
 ## footer.site
 
-claire11.org
+To learn more about Claire Reynolds, visit claire11.org.

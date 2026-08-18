@@ -41,6 +41,14 @@ require "yaml"
 require "optparse"
 require "date"
 
+# This sheet is about a Texas district; its printed date stamp means "Texas time," not
+# "whatever timezone the build machine happens to be in." Set before any Time/Date call
+# below runs, so File.mtime/Time.now/Date#to_time all resolve through the OS's own
+# zoneinfo database for America/Chicago (DST-aware, no extra gem needed) rather than
+# system-local time — matters most for a build that runs late evening Central time,
+# which is already past midnight UTC and would otherwise print tomorrow's date.
+ENV["TZ"] = "America/Chicago"
+
 require_relative "lib/chart_helpers"
 require_relative "lib/qr_helper"
 require_relative "lib/copy_deck"
@@ -65,7 +73,13 @@ class SlickSheet
   # under its caption and reserves more.
   CAPTION_RESERVE = 40.0
 
-  def initialize(figures, copy, out_path, generated_at: Time.now)
+  # The report whose file mtime pins the "Data current as of" stamp by default (see
+  # #generated_stamp and the --generated-at override below). Hardcoded, not a flag,
+  # because this script only ever builds one sheet from one candidate's data — a second
+  # sheet gets its own script, not a --source-report option here (see pdf/README.md).
+  SOURCE_REPORT = File.expand_path("../tx-11/august-pfluger/README.md", __dir__)
+
+  def initialize(figures, copy, out_path, generated_at:)
     @f = figures
     @c = copy
     @out_path = out_path
@@ -78,7 +92,11 @@ class SlickSheet
         Title: "August Pfluger: Follow the Money",
         Author: "Claire Reynolds for Congress",
         Creator: "Claire Reynolds for Congress",
-        CreationDate: @generated_at
+        # The PDF's own CreationDate is a technical property of the file (when this
+        # build actually ran) and is deliberately NOT tied to @generated_at, which
+        # drives the printed "Data current as of" stamp below instead — see gotcha at
+        # #generated_stamp for why those two dates are allowed to differ.
+        CreationDate: Time.now
       }
     )
     @pdf.font "Helvetica"
@@ -112,8 +130,13 @@ class SlickSheet
     @pdf.text_box(string, **opts)
   end
 
-  # The stamp that tells you which print run you are holding.
-  def generated_stamp = "Generated #{@generated_at.strftime('%B %-d, %Y')}"
+  # Deliberately about the DATA, not the PRINT RUN: @generated_at defaults to the source
+  # report's own file mtime (see SOURCE_REPORT), not to whenever this script happened to
+  # run, so the sheet asserts what it can actually back up — how current the underlying
+  # numbers are — rather than a build timestamp a reader has no way to verify. Date only,
+  # never a time of day; a voter doesn't need to know this ran at 9:47pm. --generated-at
+  # still overrides it, e.g. to reproduce an already-printed run's stamp byte-for-byte.
+  def generated_stamp = "Data current as of #{@generated_at.strftime('%B %-d, %Y')}"
 
   # Prawn's #height_of disagrees with what Text::Formatted::Box actually draws once
   # inline formatting is involved: it reported two lines (21.7pt) for all three
@@ -806,8 +829,7 @@ end
 
 options = {
   out: File.expand_path("output/claire-reynolds-slicksheet.pdf", __dir__),
-  copy: File.expand_path("copy/slicksheet.md", __dir__),
-  generated_at: Time.now
+  copy: File.expand_path("copy/slicksheet.md", __dir__)
 }
 OptionParser.new do |opts|
   opts.banner = "Usage: ruby pdf/build-slicksheet.rb [options]"
@@ -816,8 +838,9 @@ OptionParser.new do |opts|
     options[:copy] = v
   end
   # Lets a rebuild reproduce an earlier run's stamp byte-for-byte, e.g. when
-  # regenerating a sheet that already went to a printer.
-  opts.on("--generated-at DATE", "Override the generated-on stamp (YYYY-MM-DD)") do |v|
+  # regenerating a sheet that already went to a printer, or when the source report's
+  # own mtime has drifted (a reformat, a git checkout) without its content changing.
+  opts.on("--generated-at DATE", "Override the data-as-of stamp (YYYY-MM-DD, default: source report's file mtime)") do |v|
     options[:generated_at] = Date.parse(v).to_time
   end
   opts.on("-h", "--help", "Show this message") do
@@ -825,6 +848,16 @@ OptionParser.new do |opts|
     exit
   end
 end.parse!
+
+# Default: pin the stamp to the source report's own file mtime, not to whenever this
+# script happens to run — see the comment on SlickSheet::SOURCE_REPORT and #generated_stamp
+# for why. Only File.mtime (not the file's content) is consulted; if that report gets
+# touched without its content actually changing (a whitespace fix, a git checkout that
+# resets mtimes), --generated-at above is the escape hatch.
+options[:generated_at] ||= begin
+  abort "build-slicksheet.rb: source report not found: #{SlickSheet::SOURCE_REPORT}" unless File.exist?(SlickSheet::SOURCE_REPORT)
+  File.mtime(SlickSheet::SOURCE_REPORT)
+end
 
 figures = YAML.load_file(File.expand_path("data/figures.yml", __dir__))
 copy = CopyDeck.load(options[:copy])

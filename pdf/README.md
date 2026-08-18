@@ -87,18 +87,24 @@ against the finished artifact too:
 pdftotext pdf/output/claire-reynolds-slicksheet.pdf - | grep -c "—"   # expect 0
 ```
 
-### 2. Every sheet carries a generated-on date
+### 2. Every sheet carries a data-as-of date
 
-The footer of **both** pages prints `Generated <Month D, YYYY>`. Campaign literature
-outlives the filing period it describes, and someone holding a printed copy needs to
-know whether it predates newer FEC filings. It also tells you which run a stack of
-leftover sheets came from.
+The footer of **both** pages prints `Data current as of <Month D, YYYY>`. Campaign
+literature outlives the filing period it describes, and someone holding a printed copy
+needs to know whether it predates newer FEC filings. Saying "generated" would only tell
+them when the PDF file was built, which isn't the question that matters; the stamp
+instead asserts how current the underlying *data* is, and defaults to the file mtime of
+`tx-11/august-pfluger/README.md` (see `SlickSheet::SOURCE_REPORT` in
+`build-slicksheet.rb`), not the build clock. Dates print in Texas time (`America/Chicago`,
+DST-aware) regardless of what timezone the build machine is in, and never include a
+time of day.
 
-The stamp comes from the build clock. Pass `--generated-at YYYY-MM-DD` to reproduce an
-earlier run exactly, such as when reprinting a sheet that already went to a printer.
+Pass `--generated-at YYYY-MM-DD` to override the stamp, such as when reprinting a sheet
+that already went to a printer, or when the source report's mtime has drifted (a
+reformat, a git checkout) without its actual content changing.
 
 ```bash
-pdftotext pdf/output/claire-reynolds-slicksheet.pdf - | grep -c "Generated"   # expect 2
+pdftotext pdf/output/claire-reynolds-slicksheet.pdf - | grep -c "Data current as of"   # expect 2
 ```
 
 ### 3. Never mention this repository, its tooling, or AI

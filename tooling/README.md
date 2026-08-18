@@ -2,13 +2,13 @@
 
 This directory contains Ruby scripts for analyzing candidate campaign finance disclosures.
 
-**Run every script here as plain `ruby tooling/<script>.rb ...` from the repo root (or `ruby <script>.rb` from inside `tooling/`) — never `bundle exec ruby tooling/<script>.rb`.** All four scripts (`analyze-candidate.rb`, `donor-keyword-scan.rb`, `fec-api-client.rb`, `vendor-keyword-scan.rb`) start with `require_relative "lib/bootstrap"`, which pins gem resolution to `tooling/Gemfile` (`pdf-reader`, `csv`, `bigdecimal`, plus `rspec`/`webmock` for the test suite) — not the empty repo-root `Gemfile` — so plain `ruby` resolves gems correctly no matter your working directory, with no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. See `tooling/lib/bootstrap.rb` for the one-file explanation of why (short version: `bundle exec` sets `BUNDLE_GEMFILE` to the repo-root Gemfile *before* a script's own `require_relative` runs, and nothing can override an already-set env var after that, so bundler ends up resolving against the wrong Gemfile). If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/<script>.rb ...`.
+**Run every script here as plain `ruby tooling/<script>.rb ...` from the repo root (or `ruby <script>.rb` from inside `tooling/`) — never `bundle exec ruby tooling/<script>.rb`.** All five scripts (`analyze-candidate.rb`, `donor-keyword-scan.rb`, `donor-trace.rb`, `fec-api-client.rb`, `vendor-keyword-scan.rb`) start with `require_relative "lib/bootstrap"`, which pins gem resolution to `tooling/Gemfile` (`pdf-reader`, `csv`, `bigdecimal`, plus `rspec`/`webmock` for the test suite) — not the empty repo-root `Gemfile` — so plain `ruby` resolves gems correctly no matter your working directory, with no `bundle exec` or manual `BUNDLE_GEMFILE=` prefix needed. See `tooling/lib/bootstrap.rb` for the one-file explanation of why (short version: `bundle exec` sets `BUNDLE_GEMFILE` to the repo-root Gemfile *before* a script's own `require_relative` runs, and nothing can override an already-set env var after that, so bundler ends up resolving against the wrong Gemfile). If you ever do need `bundle exec` for some other reason, prefix it explicitly instead: `BUNDLE_GEMFILE=tooling/Gemfile bundle exec ruby tooling/<script>.rb ...`.
 
 Every script's CLI entry point (option parsing, ARGV validation, and all execution) lives behind an `if $PROGRAM_NAME == __FILE__` guard at the bottom of the file — everything above that (classes, structs, top-level helper methods) is safe to `require_relative` from a test or, eventually, a web app with no side effects. See "Running the tests" below.
 
 ## Running the tests
 
-Each script has an RSpec suite under `tooling/spec/` (`spec/vendor_keyword_scan_spec.rb`, `spec/donor_keyword_scan_spec.rb`, `spec/fec_api_client_spec.rb`, `spec/analyze_candidate/`) that exercises its classes/structs/methods directly against throwaway fixture data — no real `tx-*/` candidate data or live network calls involved (HTTP is stubbed with WebMock in the `fec-api-client.rb` specs). These are characterization tests written to pin down *current* behavior — including the data-integrity gotchas documented in each script's header comments — as a safety net before any refactor, not an exhaustive spec of intended behavior.
+Each script has an RSpec suite under `tooling/spec/` (`spec/vendor_keyword_scan_spec.rb`, `spec/donor_keyword_scan_spec.rb`, `spec/donor_trace_spec.rb`, `spec/fec_api_client_spec.rb`, `spec/analyze_candidate/`) that exercises its classes/structs/methods directly against throwaway fixture data — no real `tx-*/` candidate data or live network calls involved (HTTP is stubbed with WebMock in the `fec-api-client.rb` specs). These are characterization tests written to pin down *current* behavior — including the data-integrity gotchas documented in each script's header comments — as a safety net before any refactor, not an exhaustive spec of intended behavior.
 
 ```bash
 # From inside tooling/ (primary way to run them):
@@ -148,6 +148,44 @@ ruby tooling/donor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec \
 **The efile gap.** Same shape as `vendor-keyword-scan.rb`'s (see that section above), but for receipts: `--include-efile-gap` finds `schedule_a`'s own latest `contribution_receipt_date` per committee and scans only receipts-shaped efile rows dated strictly after that. Raw efile receipts need more reconciliation than disbursements do, because a single filing can appear multiple times in efile as amendments are processed (`schedule_a`, by contrast, already resolves amendments upstream) — gap rows go through two dedup passes (by `transaction_id`, then by a `[date, amount, contributor name]` natural key, each keeping the latest `load_timestamp`) before being restricted to line `11AI`/individual or `11C`/political-committee rows, matching `analyze-candidate.rb`'s own `EFILE_INDIVIDUAL_LINES`/`EFILE_COMMITTEE_LINES`. Matches sourced this way are tagged `[efile, not yet in processed export]` (or `"source": "efile-gap"` in JSON).
 
 **Caveats:** same substring-matching over/under-match risk as `vendor-keyword-scan.rb` — spot-check matches before publishing a total, and see the script's header comments for the full gotcha list.
+
+## donor-trace.rb
+
+**Purpose:** Follows one donor's money from the committee that cashed the check to the committees that actually received it. Where `donor-keyword-scan.rb` answers "which rows match this name," this one answers a question no other tool here can: *"this person wrote a joint fundraising committee a check for $X — where did the $X end up?"*
+
+That question has an answer in the data because a JFC can't keep what it raises. It splits each check among its participants per its joint fundraising agreement, and every participant that receives a slice must itemize the **original donor** on its own Schedule A as a memo entry under "Transfers from authorized committees." The same dollars therefore appear twice, in two committees' filings, and `back_reference_transaction_id` ties the memo entry to the specific transfer it rode in on.
+
+**Usage:**
+
+```bash
+ruby tooling/donor-trace.rb --fec-dir tx-11/august-pfluger/fec \
+  --donor "ANWAR, SYED JAVAID" --cycle 2026
+
+ruby tooling/donor-trace.rb --fec-dir tx-11/august-pfluger/fec \
+  --donor "anwar" --cycle 2026 --format json
+```
+
+**Flags:**
+
+| Flag | Purpose |
+|------|---------|
+| `--fec-dir DIR` | Candidate's `fec/` directory |
+| `--donor NAME` | Donor name substring, case-insensitive. **Repeatable, and NOT comma-split** — see the gotcha below |
+| `--cycle YYYY` | Scope to one `two_year_transaction_period` |
+| `--format json` | JSON instead of text |
+| `--out FILE` | Write to a file instead of stdout |
+
+**`--donor` is not comma-separated**, unlike `donor-keyword-scan.rb`'s `--keywords`. FEC files `contributor_name` as `"LAST, FIRST MIDDLE"`, so the most natural thing to type — `--donor "ANWAR, SYED JAVAID"` — would split into `anwar` + `syed javaid` under comma-splitting and silently match every Anwar in the file, quietly widening a single-donor trace into a whole-family one. Repeat the flag to trace several donors at once.
+
+**Output sections:** `SOURCES` (contributions the donor actually made), `TRACED LANDINGS` (attribution rows disclosing where that money arrived, each linked back to its parent transfer), `RECONCILIATION` (received vs. traced vs. untraced residual, plus each committee's `schedule_a` coverage dates), and `RESIDUAL DESTINATIONS` (every committee the source JFC transferred to that cycle).
+
+**This is the one tool here that reads `memo_code == "X"` rows on purpose.** Every other script skips them to avoid double-counting; JFC attribution rows *are* memo rows, so tracing requires them. It never sums sources and landings together — a landing is an attribution slice of a source already counted at the JFC, not new money.
+
+**An untraced residual means "not traceable from local data," not "unaccounted for."** Landings are only visible for committees whose filings are on disk. A JFC's other participants (a party committee, another member's leadership PAC) file their attribution rows in their own Schedule A, which this repo doesn't have unless someone downloaded it. The `RESIDUAL DESTINATIONS` section lists the JFC's Schedule B transfer recipients as the *set* of places the residual went, deliberately without claiming a per-donor split of it.
+
+**No efile gap handling, on purpose** — tracing needs both halves of a `transaction_id` link, and raw efile doesn't preserve those reliably across amendments. Use `donor-keyword-scan.rb --include-efile-gap` to check whether a donor has activity past the processed export's cutoff before trusting a trace to be complete.
+
+**Caveats:** read the script's header comments for all seven data-integrity gotchas. Two are worth knowing before you trust a total: the FEC line label "Transfers from authorized committees" is **capitalized differently across Pfluger's own committees** and must be matched case-insensitively (an exact match reads as a clean "nothing traced" rather than a bug), and **partnership/LLC contributions attributed to individual partners** are memo-coded on the *donor* side, so a donor who gives through a partnership shows a smaller `SOURCES` total than they actually gave.
 
 ## fec-api-client.rb
 

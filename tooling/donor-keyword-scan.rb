@@ -77,6 +77,7 @@
 
 require_relative "lib/bootstrap"
 require_relative "lib/fec_committees"
+require_relative "lib/fec_labels"
 
 require "csv"
 require "optparse"
@@ -84,10 +85,8 @@ require "json"
 require "bigdecimal"
 require "date"
 
-DONOR_LABELS = [
-  "Contributions From Individuals/Persons Other Than Political Committees",
-  "Contributions From Other Political Committees"
-].freeze
+# DONOR_LABELS now lives in lib/fec_labels.rb — shared with donor-trace.rb, which needs the
+# same allowlist. See that file for why a second top-level copy here was a footgun.
 EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
 EFILE_COMMITTEE_LINES = %w[11C].freeze
 

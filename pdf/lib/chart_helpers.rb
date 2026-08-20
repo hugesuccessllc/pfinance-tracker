@@ -149,7 +149,9 @@ module ChartHelpers
 
       next unless bar[:note]
 
-      pdf.fill_color INK_MUTED
+      # INK_SECONDARY: this note sits on a panel's tinted background, not white — see the
+      # rationale on the #panel subtitle above (same background, same legibility floor).
+      pdf.fill_color INK_SECONDARY
       pdf.text_box bar[:note],
                    at: [x, bar_top - BAR_THICKNESS - 1.5],
                    width: width,
@@ -195,7 +197,9 @@ module ChartHelpers
       pdf.fill_color color
       pdf.fill_circle([cx, cy], MARKER_RADIUS)
 
-      pdf.fill_color INK_MUTED
+      # INK_SECONDARY, not INK_MUTED: these axis labels sit on the panel's tinted
+      # background, same legibility floor as the subtitle above.
+      pdf.fill_color INK_SECONDARY
       pdf.text_box points[index][:cycle].to_s,
                    at: [cx - 16, y - height - 3],
                    width: 32,
@@ -272,7 +276,13 @@ module ChartHelpers
                  style: :bold,
                  overflow: :shrink_to_fit
 
-    pdf.fill_color INK_MUTED
+    # INK_SECONDARY, not INK_MUTED: this subtitle is a full explanatory sentence a reader
+    # is meant to read, sitting on PANEL_PLANE's light indigo tint. INK_MUTED (#8a8a9c) at
+    # 6.8pt on that background prints too faint to read comfortably; INK_SECONDARY
+    # (#4a4a63) holds the same visual hierarchy below the bold title without disappearing
+    # on paper. INK_MUTED stays correct for this file's other uses — axis labels and
+    # footnotes, which are meant to recede rather than be read line by line.
+    pdf.fill_color INK_SECONDARY
     subtitle_height = pdf.height_of(subtitle, width: inner_width, size: 6.8, leading: 1)
     pdf.text_box subtitle,
                  at: [inner_x, y - 26],

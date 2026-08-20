@@ -309,7 +309,9 @@ class SlickSheet
     panel_caption(@pdf, @c["panel.industry.caption"], at: [x, caption_y],
                   width: inner_w, height: 32)
 
-    @pdf.fill_color INK_MUTED
+    # INK_SECONDARY, not INK_MUTED: sits on the panel's tinted background, same
+    # legibility floor as every other panel-background text on this sheet.
+    @pdf.fill_color INK_SECONDARY
     text_box @c["panel.industry.footnote"],
                   at: [x, caption_y - 34],
                   width: inner_w,
@@ -328,7 +330,8 @@ class SlickSheet
     x = at[0] + 12
     inner_w = CELL_W - 24
 
-    @pdf.fill_color INK_MUTED
+    # INK_SECONDARY, not INK_MUTED — see the panel.industry.footnote comment above.
+    @pdf.fill_color INK_SECONDARY
     text_box @c["panel.luxury.chart_label"],
                   at: [x, content_y - 2],
                   width: inner_w,
@@ -395,7 +398,8 @@ class SlickSheet
 
     bars_y = content_y - 54
 
-    @pdf.fill_color INK_MUTED
+    # INK_SECONDARY, not INK_MUTED — see the panel.industry.footnote comment above.
+    @pdf.fill_color INK_SECONDARY
     text_box @c["panel.geography.chart_label"],
                   at: [x, bars_y],
                   width: inner_w,
@@ -442,6 +446,17 @@ class SlickSheet
   end
 
   LOGO_PATH = File.expand_path("assets/circle-c.png", __dir__)
+
+  # One icon per verify step, in the same order as verify.steps in the copy deck. Solid
+  # silhouettes from Font Awesome Free (CC BY 4.0), recolored to BRAND_INDIGO and
+  # rasterized from the original SVGs — see #draw_step_icons for the attribution this
+  # license requires, printed on both pages next to the FEC source note.
+  STEP_ICON_PATHS = [
+    File.expand_path("assets/icons/step-1-committee.png", __dir__),
+    File.expand_path("assets/icons/step-2-find.png", __dir__),
+    File.expand_path("assets/icons/step-3-receipts.png", __dir__),
+    File.expand_path("assets/icons/step-4-disbursements.png", __dir__)
+  ].freeze
 
   def draw_verify_masthead
     band_top = PAGE_HEIGHT
@@ -534,25 +549,44 @@ class SlickSheet
   def draw_steps(top_y)
     y = top_y
 
-    @c["verify.steps"].each_with_index do |step, index|
-      body_h = measured_height(step[:body], width: CONTENT_W - 44, size: 8.6, leading: 1.8)
+    # Was a numbered indigo circle per step. A circle that size (22pt) leaves single-digit
+    # ink only a few points of margin on every side, so getting a digit's own bounding box
+    # (which varies per glyph — "1" isn't "3") to read as centered took two rounds of
+    # measure-against-a-rendered-proof correction and still wasn't foolproof: a shape
+    # everyone recognizes as "should be centered" only ever reads that way to a human eye,
+    # and this is print, not a build we can patch after it ships. Steps don't need a
+    # sequence number to read as sequential — the titles are already ordered verbs ("Go
+    # to," "Find," "Click") — so numbers gave way to two things instead: alternating row
+    # bands, the same device a dense table uses to keep rows visually distinct without a
+    # mark that has to be pixel-perfect to look right, and a themed icon per step (a
+    # square image has no single "is this centered" question the way a glyph-in-a-circle
+    # does).
+    left_pad = 8
+    icon_size = 24
+    icon_gap = 10
+    text_indent = left_pad + icon_size + icon_gap
+    right_pad = 8
 
-      @pdf.fill_color SERIES_INDIGO
-      @pdf.fill_circle([MARGIN + 11, y - 9], 11)
-      @pdf.fill_color "FFFFFF"
-      text_box (index + 1).to_s,
-                    at: [MARGIN, y - 3.5],
-                    width: 22,
-                    height: 13,
-                    size: 11,
-                    style: :bold,
-                    align: :center,
-                    overflow: :shrink_to_fit
+    @c["verify.steps"].each_with_index do |step, index|
+      text_w = CONTENT_W - text_indent - right_pad
+      body_h = measured_height(step[:body], width: text_w, size: 8.6, leading: 1.8)
+
+      band_top = y + 9
+      band_bottom = y - 16 - body_h - 9
+      if index.even?
+        @pdf.fill_color PANEL_PLANE
+        @pdf.fill_rectangle([MARGIN, band_top], CONTENT_W, band_top - band_bottom)
+      end
+
+      @pdf.image STEP_ICON_PATHS[index],
+                 at: [MARGIN + left_pad, y + 3],
+                 width: icon_size,
+                 height: icon_size
 
       @pdf.fill_color INK_PRIMARY
       text_box step[:title],
-                    at: [MARGIN + 34, y],
-                    width: CONTENT_W - 44,
+                    at: [MARGIN + text_indent, y],
+                    width: text_w,
                     height: 15,
                     size: 11,
                     style: :bold,
@@ -560,8 +594,8 @@ class SlickSheet
 
       @pdf.fill_color INK_SECONDARY
       text_box step[:body],
-                    at: [MARGIN + 34, y - 16],
-                    width: CONTENT_W - 44,
+                    at: [MARGIN + text_indent, y - 16],
+                    width: text_w,
                     height: body_h + 2,
                     size: 8.6,
                     leading: 1.8,
@@ -797,16 +831,26 @@ class SlickSheet
     @pdf.stroke_rectangle([MARGIN, box_y], box_w, box_h)
 
     @pdf.fill_color INK_PRIMARY
+    # y offset measured against a rendered proof, not eyeballed, then re-measured after
+    # the first correction and adjusted again: 7.36 centers the text's own ink to within
+    # 0.03pt of the stroked box's true vertical center (well under one screen pixel).
     text_box @c["footer.disclaimer"],
-                  at: [MARGIN, box_y - 6.5],
+                  at: [MARGIN, box_y - 7.36],
                   width: box_w,
                   height: 11,
                   size: 8,
                   align: :center,
                   overflow: :shrink_to_fit
 
+    # The icon-credit sentence only belongs on page 2 (the only page with icons), but
+    # lands in this same shared source-note paragraph rather than a separate text_box —
+    # "near the FEC notes," per the license's attribution requirement, means exactly
+    # this line, not just this page.
+    source_text = "#{@c['footer.source_note']}  #{generated_stamp}."
+    source_text += "  #{@c['footer.icon_credit']}" unless page_one
+
     @pdf.fill_color INK_MUTED
-    text_box "#{@c['footer.source_note']}  #{generated_stamp}.",
+    text_box source_text,
                   at: [MARGIN + box_w + 16, box_y - 2],
                   width: CONTENT_W - box_w - 16,
                   height: 22,

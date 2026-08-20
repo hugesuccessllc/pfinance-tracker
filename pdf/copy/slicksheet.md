@@ -230,6 +230,10 @@ Paid for by Claire Reynolds for Congress
 Source: FEC.gov campaign finance filings covering 2020 through 2026, committees C00719294,
 C00753913, C00749481, and C00840033.
 
+## footer.icon_credit
+
+Step icons: Font Awesome Free by Fonticons, Inc., fontawesome.com, licensed CC BY 4.0.
+
 ## footer.turn_over
 
 Turn over to check these numbers yourself.

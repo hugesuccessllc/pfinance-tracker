@@ -338,6 +338,23 @@ RSpec.describe FecAnalyzer do
       expect(ivc["individual"]).to eq(BigDecimal("100"))
       expect(ivc["committee/PAC"]).to eq(BigDecimal("50"))
     end
+
+    it "recognizes the full-word 'true'/'false' spelling of is_individual, not just 't'/'f' (gotcha 10)" do
+      fec_dir = fec_dir_with({
+        "C00000001" => {
+          schedule_a: [
+            schedule_a_row(contributor_name: "Ind Donor", is_individual: "true", contribution_receipt_amount: "100"),
+            schedule_a_row(contributor_name: "PAC Donor", is_individual: "false", contribution_receipt_amount: "50",
+                            line_number_label: "Contributions From Other Political Committees")
+          ]
+        }
+      })
+
+      ivc = donors_for(fec_dir)[:individual_vs_committee]
+
+      expect(ivc["individual"]).to eq(BigDecimal("100"))
+      expect(ivc["committee/PAC"]).to eq(BigDecimal("50"))
+    end
   end
 
   # ---------------------------------------------------------------------------

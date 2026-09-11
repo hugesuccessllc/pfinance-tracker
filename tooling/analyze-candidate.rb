@@ -247,6 +247,23 @@
 #      actually matters here). This is a deliberately lighter pass than the main donor/
 #      disbursement pipeline — no efile gap-filling, no cap-check — proportionate to its
 #      role as supplementary context rather than a primary total this report leans on.
+#
+#   10. The processed schedule_a export's `is_individual` column is a boolean, but which
+#       LITERAL STRING encodes it varies by committee/export, not just by format: most
+#       committees checked so far use the single-letter FEC bulk codes "t"/"f", but Pete
+#       Sessions's C00303305 (TX-17), one of August Pfluger's newer committees
+#       (C00857649), and Casey Shepard's C00934547 (TX-17) instead spell it out as the
+#       full words "true"/"false" — this doesn't correlate cleanly with manual-export vs.
+#       fec-api-client.rb, since files collected both ways appear on both sides of the
+#       split. Comparing against the single-letter string only (`row["is_individual"] ==
+#       "t"`) silently reads every "true"/"false"-style row as false — on Sessions's data
+#       this misclassified 100% of donor rows as committee/PAC, hiding ~$1M of real
+#       individual-donor money from "Individual vs. Committee/PAC receipts" and from any
+#       `--donor-type individual` filter, without ever raising a warning (a boolean column
+#       reading uniformly false looks like a plausible real answer, not an obvious parse
+#       failure). `individual_flag?` normalizes both spellings ("t"/"true" → true,
+#       everything else, including blank, → false) and is used everywhere this script
+#       reads `is_individual` off a processed-export row.
 
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
@@ -625,8 +642,15 @@ class FecAnalyzer
 
   def donor_type_matches?(row, donor_type)
     return true unless donor_type
-    is_individual = row["is_individual"] == "t"
+    is_individual = individual_flag?(row["is_individual"])
     donor_type == "individual" ? is_individual : !is_individual
+  end
+
+  # Normalizes the processed schedule_a export's is_individual boolean column, which is
+  # spelled either as the single-letter FEC bulk codes ("t"/"f") or the full words
+  # ("true"/"false") depending on committee/export — see gotcha 10.
+  def individual_flag?(value)
+    %w[t true].include?(value.to_s.strip.downcase)
   end
 
   def donor_type_matches_efile?(is_individual, donor_type)
@@ -891,7 +915,7 @@ class FecAnalyzer
                            city: row["contributor_city"].to_s.strip,
                            state: row["contributor_state"].to_s.strip,
                            amount: decimal(row["contribution_receipt_amount"]),
-                           is_individual: row["is_individual"] == "t")
+                           is_individual: individual_flag?(row["is_individual"]))
       end
 
       # See gotcha 8: fold in raw efile receipts dated strictly after this committee's own
@@ -980,7 +1004,7 @@ class FecAnalyzer
                      city: row["contributor_city"].to_s.strip,
                      state: row["contributor_state"].to_s.strip,
                      amount: decimal(row["contribution_receipt_amount"]),
-                     is_individual: row["is_individual"] == "t")
+                     is_individual: individual_flag?(row["is_individual"]))
       end
 
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
@@ -1098,7 +1122,7 @@ class FecAnalyzer
           case line_label
           when DONOR_LABELS[0] then true
           when DONOR_LABELS[1] then false
-          else row["is_individual"] == "t"
+          else individual_flag?(row["is_individual"])
           end
         record_contribution.call(
           name: row["contributor_name"], employer: row["contributor_employer"],

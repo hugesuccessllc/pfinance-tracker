@@ -264,6 +264,42 @@
 #       failure). `individual_flag?` normalizes both spellings ("t"/"true" → true,
 #       everything else, including blank, → false) and is used everywhere this script
 #       reads `is_individual` off a processed-export row.
+#
+#   11. Two more efile gap-fill misses, both surfaced by Claire Reynolds's Q3 2026 data
+#       (C00929711, efile file_numbers 2019377/2019378):
+#
+#       - Line 11C committee receipts aren't always entity_type "PAC". A $1,000 check from
+#         "Texas Democratic Women of Highland Lakes" was filed on 11C as "PTY". A PAC-only
+#         check dropped it from donor totals while the EFILE COVERAGE WARNING banner (which
+#         sums every non-memo gap row) still counted it, so the two numbers disagreed by
+#         exactly $1,000. EFILE_COMMITTEE_ENTITY_TYPES lists the committee-like codes.
+#
+#       - The casing wrinkle in gotcha 8 applies to Schedule B payees too: "PRINTMAIL PRO"
+#         (processed) and "PrintMail Pro" (efile) showed up as two payees, each ranking lower
+#         than their combined $8,504.40 would. analyze_disbursements now keys payees by
+#         upcased name, the same as analyze_donors.
+#
+#       Separately (not a bug, but don't mistake it for one): raw efile Schedule B has only
+#       one recipient_name column, and individual payees (entity_type IND/CAN) come through
+#       as a bare surname ("Young", "Ehresman", "Reynolds"). Don't invent a first name; the
+#       processed export fills it in once FEC catches up.
+#
+#   12. Itemized rows are not the whole picture, and no schedule_a/schedule_b/efile export
+#       can make them so. Contributions from donors giving $200 or less in the cycle, and
+#       payments to vendors totaling $200 or less, are reported only as lump sums on a
+#       report's summary page; cash on hand and debts live there too. On Claire Reynolds's
+#       C00929711 through 2026-09-30, every itemized dollar reconciled to the cent, yet total
+#       receipts were $122,571.79 against $89,299.62 itemized — the difference was $33,189.22
+#       in unitemized individual gifts, a $5.00 candidate contribution, and a $77.95 offset.
+#       A report that quotes only the itemized number understates fundraising by ~27%.
+#
+#       Step 1 now saves the committee page's "Total raised" / "Total spent" / "Cash summary"
+#       panels as fec/<id>/fec-summary-YYYY-MM-DD.txt (text as copied; "Label<TAB>$amount"
+#       lines plus "Coverage dates: MM/DD/YYYY to MM/DD/YYYY"). committee_summaries reads the
+#       newest one and render_committee_summaries prints it with a reconciliation against the
+#       itemized totals. A MISMATCH there means the summary's coverage dates and the itemized
+#       data's date range don't line up (or an itemized row was missed) — investigate before
+#       quoting either number. The summary covers its own coverage dates, not --cycle.
 
 # A committee that raises through a joint fundraising committee (JFC) will show large
 # "Transfers" entries in Schedule B representing the JFC redistributing pooled money to
@@ -311,6 +347,11 @@ class FecAnalyzer
   EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
   EFILE_COMMITTEE_LINES = %w[11C].freeze
 
+  # efile entity_type values that count as a committee giver on EFILE_COMMITTEE_LINES — not
+  # just "PAC". See gotcha 11: a local party-affiliated club filed as "PTY" on line 11C was
+  # silently dropped from donor totals when this was a PAC-only check.
+  EFILE_COMMITTEE_ENTITY_TYPES = %w[PAC PTY COM CCM].freeze
+
   # For refund cap-checking ONLY (see analyze_refunds): "Transfers from authorized
   # committees" is excluded from DONOR_LABELS everywhere else (gotcha 3) because it's mostly
   # JFC-pooled money, not a direct donor relationship. But gotcha 7 established that this same
@@ -340,6 +381,9 @@ class FecAnalyzer
   # as financially connected to the candidate but NOT one of their own committees — read by
   # `committees` (to exclude it) and `connected_committees` (to pick it up instead).
   CONNECTED_MARKER = "CONNECTED".freeze
+
+  # See gotcha 12: FEC-reported summary totals, copied from the committee's fec.gov page.
+  SUMMARY_GLOB = "fec-summary-*.txt".freeze
 
   # Role markers for committees the candidate DOES own/control — same empty-file convention.
   # PRINCIPAL is written automatically by fec-api-client.rb's --principal flag; OWNED is the
@@ -399,6 +443,27 @@ class FecAnalyzer
                                    .map { |id| load_affiliated_totals(id) }
   end
 
+  # See gotcha 12: fec-summary-*.txt is the committee page's "Total raised" / "Total spent" /
+  # "Cash summary" panels, copied as text during Step 1. Newest file (by name) wins. Only
+  # read for committees in `committees` — it's reconciled against their itemized totals.
+  def committee_summaries
+    @committee_summaries ||= committees.filter_map do |c|
+      path = Dir.glob(File.join(c.dir, SUMMARY_GLOB)).max
+      next unless path
+
+      fields = {}
+      coverage = []
+      File.readlines(path, chomp: true).each do |line|
+        if (m = line.match(/Coverage dates:\s*(\S+)\s+to\s+(\S+)/))
+          coverage << "#{m[1]} to #{m[2]}"
+        elsif (m = line.match(/\A(.+?)(?:\t+|\s{2,})\$?(-?[\d,]+\.\d{2})\s*\z/))
+          fields[m[1].strip] = BigDecimal(m[2].delete(","))
+        end
+      end
+      { committee_id: c.id, committee_name: c.name, file: File.basename(path), coverage: coverage.uniq, fields: fields }
+    end
+  end
+
   # Committees marked CONNECTED (see gotcha 9): itemized data exists and is read, but kept
   # out of `committees` and every itemized donor/disbursement total that iterates over it.
   # Reported separately via analyze_connected_committees/render_connected_committees.
@@ -418,7 +483,8 @@ class FecAnalyzer
                  connected_committees: analyze_connected_committees(cycle: @cycle),
                  transfer_recipients: analyze_transfer_recipients,
                  cycle_integrity: cycle_integrity_check,
-                 efile_gaps: efile_gaps(cycle: @cycle) }
+                 efile_gaps: efile_gaps(cycle: @cycle),
+                 committee_summaries: committee_summaries }
       if @by_cycle
         result[:by_cycle] = discovered_cycles.each_with_object({}) do |cyc, h|
           h[cyc] = { donors: analyze_donors(cycle: cyc), disbursements: analyze_disbursements(cycle: cyc) }
@@ -440,6 +506,7 @@ class FecAnalyzer
         connected_committees: analyze_connected_committees(cycle: @cycle),
         transfer_recipients: analyze_transfer_recipients,
         efile_gaps: efile_gaps(cycle: @cycle),
+        committee_summaries: committee_summaries,
         donors: analyze_donors,
         disbursements: analyze_disbursements,
         donor_geography: (analyze_donor_geography if @by_state),
@@ -476,6 +543,7 @@ class FecAnalyzer
     end
 
     render_efile_gaps(io, data[:efile_gaps])
+    render_committee_summaries(io, data)
     render_affiliated_committees(io, data[:affiliated_committees])
     render_connected_committees(io, data[:connected_committees])
     render_transfer_recipients(io, data[:transfer_recipients])
@@ -923,7 +991,7 @@ class FecAnalyzer
       # anything already counted above.
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
         is_individual = row["entity_type"] == "IND"
-        is_committee = row["entity_type"] == "PAC"
+        is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
         next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
                     (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
         next unless donor_type_matches_efile?(is_individual, donor_type)
@@ -1009,7 +1077,7 @@ class FecAnalyzer
 
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
         is_individual = row["entity_type"] == "IND"
-        is_committee = row["entity_type"] == "PAC"
+        is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
         next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
                     (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
         next unless donor_type_matches_efile?(is_individual, donor_type)
@@ -1146,7 +1214,7 @@ class FecAnalyzer
       # month later showed up with no matching contribution row at all).
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
         is_individual = %w[IND ORG].include?(row["entity_type"])
-        is_committee = row["entity_type"] == "PAC"
+        is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
         next unless (EFILE_CAP_CHECK_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
                     (EFILE_CAP_CHECK_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
         # Raw efile Schedule A has no election_type column at all (that's a processed-
@@ -1338,10 +1406,13 @@ class FecAnalyzer
       category_totals[category] += amount
       category_counts[category] += 1
 
+      # Keyed by upcased name for the same reason analyze_donors upcases its key (gotcha 8's
+      # casing wrinkle, and gotcha 11): processed rows are ALL CAPS, gap-filled efile rows
+      # aren't, and the same vendor would otherwise split into two payees.
       payee = row["recipient_name"].to_s.strip
       unless payee.empty?
-        payee_totals[payee] += amount
-        payee_meta[payee] ||= { city: row["recipient_city"].to_s.strip, state: row["recipient_state"].to_s.strip, category: category }
+        payee_totals[payee.upcase] += amount
+        payee_meta[payee.upcase] ||= { payee: payee, city: row["recipient_city"].to_s.strip, state: row["recipient_state"].to_s.strip, category: category }
       end
 
       committee_totals[committee.id] += amount
@@ -1383,7 +1454,7 @@ class FecAnalyzer
     {
       committee_totals: committee_totals,
       by_category: category_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |cat, total| { category: cat, total: total, count: category_counts[cat] } },
-      top_payees: payee_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |payee, total| payee_meta[payee].merge(payee: payee, total: total) },
+      top_payees: payee_totals.select { |_k, v| v > 0 }.sort_by { |_k, v| -v }.first(@top).map { |key, total| payee_meta[key].merge(total: total) },
       top_single: all_disbursements.sort_by { |r| -r[:amount] }.first(@top),
       card_breakdown: analyze_card_breakdown(cycle: cycle)
     }
@@ -1520,6 +1591,48 @@ class FecAnalyzer
       io.puts "  #{g[:committee_name]} [#{g[:committee_id]}] #{g[:schedule]}: processed data ends " \
               "#{g[:processed_through]}, efile data found through #{g[:efile_through]} " \
               "(#{g[:row_count]} row(s), #{money(g[:total])} added)"
+    end
+    io.puts
+  end
+
+  # Prints each committee's FEC-reported totals (gotcha 12) and, when this run produced a
+  # single flat report (not --by-cycle), reconciles them against the itemized totals below.
+  # Itemized receipts are compared against the summary's itemized-individual + party +
+  # other-committee lines, which should match to the cent when coverage dates line up;
+  # the rest of the summary (unitemized gifts, small vendor payments, cash, debts) only
+  # exists here, never in schedule_a/schedule_b/efile rows.
+  def render_committee_summaries(io, data)
+    list = data[:committee_summaries]
+    return if list.nil? || list.empty?
+
+    io.puts "=" * 80
+    io.puts "FEC-REPORTED COMMITTEE TOTALS (from fec-summary-*.txt — includes unitemized money the itemized sections below can't see)"
+    io.puts "=" * 80
+    list.each do |s|
+      f = s[:fields]
+      io.puts "#{s[:committee_name]} [#{s[:committee_id]}] — #{s[:file]}, coverage #{s[:coverage].join('; ')}"
+      f.each { |label, amount| io.puts "  #{label}: #{money(amount)}" }
+
+      next unless data[:donors] && data[:disbursements]
+
+      reported_itemized = %w[Itemized\ individual\ contributions Party\ committee\ contributions Other\ committee\ contributions]
+                          .sum { |k| f.fetch(k, BigDecimal(0)) }
+      itemized_receipts = data[:donors][:committee_totals][s[:committee_id]]
+      itemized_spent = data[:disbursements][:committee_totals][s[:committee_id]]
+      io.puts "  Reconciliation:"
+      io.puts "    itemized donor receipts (this tool): #{money(itemized_receipts)} vs. FEC itemized individual + party + other committee: #{money(reported_itemized)}" \
+              "#{itemized_receipts == reported_itemized ? ' — match' : " — MISMATCH (#{money(reported_itemized - itemized_receipts)}); check coverage dates and efile gap-fill"}"
+      if f["Total receipts"] && itemized_receipts
+        io.puts "    total receipts not in itemized donor rows: #{money(f['Total receipts'] - itemized_receipts)} " \
+                "(unitemized individual #{money(f.fetch('Unitemized individual contributions', BigDecimal(0)))}, " \
+                "candidate #{money(f.fetch('Candidate contributions', BigDecimal(0)))}, " \
+                "offsets #{money(f.fetch('Offsets to operating expenditures', BigDecimal(0)))}, " \
+                "other #{money(f.fetch('Other receipts', BigDecimal(0)))})"
+      end
+      if f["Total disbursements"] && itemized_spent
+        io.puts "    itemized disbursements (this tool): #{money(itemized_spent)} vs. FEC total disbursements: #{money(f['Total disbursements'])} " \
+                "— #{money(f['Total disbursements'] - itemized_spent)} not itemized (payments to a vendor totaling $200 or less aren't required to be)"
+      end
     end
     io.puts
   end

@@ -64,6 +64,8 @@ Manually export from https://www.fec.gov/data/, starting with just the principal
 
 <img src="images/clear-button.png" width=200>
 
+* Back on the committee page, copy the "Total raised," "Total spent," and "Cash summary" panels (coverage dates included) as plain text into `fec-summary-YYYY-MM-DD.txt` in the same directory, e.g. `tx-11/august-pfluger/fec/C00719294/fec-summary-2026-10-12.txt`. The CSV exports only contain *itemized* transactions — they can't show money from donors who gave $200 or less, small vendor payments, cash on hand, or debts, and for a small-dollar campaign that can be a quarter or more of everything raised. `analyze-candidate.rb` reads the newest summary file and reconciles it against the itemized totals (see gotcha 12 in its header).
+
 * **Stop there for a first pass.** A candidate may have several committees (as seen below) — a JFC, a leadership PAC, prior-cycle committee IDs — but don't go collect all of them reflexively.
 
 <img src="images/several-committees.png" width=300>

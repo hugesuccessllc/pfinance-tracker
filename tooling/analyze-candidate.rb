@@ -279,6 +279,15 @@
 #         than their combined $8,504.40 would. analyze_disbursements now keys payees by
 #         upcased name, the same as analyze_donors.
 #
+#       - The same problem on line 11AI: Pfluger Victory Fund's (C00753913) Q3 2026 efile has
+#         nine 11AI rows filed as entity_type "ORG" (LLCs and professional practices, e.g. "L M
+#         SALES ASSOCIATES", "BASIN COMPUTER SERVICES LLC") totaling $23,250. An IND-only check
+#         dropped all of them, so the committee-summary reconciliation came up short by exactly
+#         that amount. The processed export counts ORG rows under its individuals label (with
+#         is_individual mostly "f"), so the gap-fill now does too: EFILE_INDIVIDUAL_LINE_ENTITY_
+#         TYPES admits IND and ORG on 11AI, and only IND sets is_individual. The refund cap-check
+#         path (analyze_refunds) already accepted ORG for the same reason.
+#
 #       Separately (not a bug, but don't mistake it for one): raw efile Schedule B has only
 #       one recipient_name column, and individual payees (entity_type IND/CAN) come through
 #       as a bare surname ("Young", "Ehresman", "Reynolds"). Don't invent a first name; the
@@ -351,6 +360,12 @@ class FecAnalyzer
   # just "PAC". See gotcha 11: a local party-affiliated club filed as "PTY" on line 11C was
   # silently dropped from donor totals when this was a PAC-only check.
   EFILE_COMMITTEE_ENTITY_TYPES = %w[PAC PTY COM CCM].freeze
+
+  # efile entity_type values that count as a giver on EFILE_INDIVIDUAL_LINES — "ORG" (an LLC,
+  # partnership, or professional practice filed on 11AI) as well as "IND". See gotcha 11: the
+  # processed export already counts these under its individuals label, so an IND-only check
+  # silently dropped them from gap-filled donor totals. Only "IND" sets is_individual.
+  EFILE_INDIVIDUAL_LINE_ENTITY_TYPES = %w[IND ORG].freeze
 
   # For refund cap-checking ONLY (see analyze_refunds): "Transfers from authorized
   # committees" is excluded from DONOR_LABELS everywhere else (gotcha 3) because it's mostly
@@ -992,7 +1007,8 @@ class FecAnalyzer
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
         is_individual = row["entity_type"] == "IND"
         is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
-        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) &&
+                     EFILE_INDIVIDUAL_LINE_ENTITY_TYPES.include?(row["entity_type"])) ||
                     (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
         next unless donor_type_matches_efile?(is_individual, donor_type)
 
@@ -1078,7 +1094,8 @@ class FecAnalyzer
       efile_gap_rows(committee, :receipts, processed_max_date(committee, "schedule_a"), cycle).each do |row|
         is_individual = row["entity_type"] == "IND"
         is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
-        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+        next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) &&
+                     EFILE_INDIVIDUAL_LINE_ENTITY_TYPES.include?(row["entity_type"])) ||
                     (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
         next unless donor_type_matches_efile?(is_individual, donor_type)
 

@@ -619,6 +619,21 @@ RSpec.describe FecAnalyzer do
         expect(names).to include("Some PAC")
       end
 
+      it "includes an 11AI/ORG gap row (gotcha 11) without marking it individual" do
+        fec_dir = gap_fixture([
+          efile_receipt_row(contributor_last_name: "L M Sales Associates", contributor_first_name: "",
+                             contribution_receipt_date: "2026-06-30", contribution_receipt_amount: "7000",
+                             line_number: "11AI", entity_type: "ORG")
+        ])
+
+        result = analyzer_for(fec_dir).send(:analyze_donors)
+        org = result[:top].find { |d| d[:name] == "L M Sales Associates" }
+
+        expect(org).not_to be_nil
+        expect(org[:total]).to eq(BigDecimal("7000"))
+        expect(result[:individual_vs_committee]["committee/PAC"]).to eq(BigDecimal("7000"))
+      end
+
       it "renders efile-gap-filled donor names via last, first (efile has no combined contributor_name)" do
         fec_dir = gap_fixture([
           efile_receipt_row(contributor_last_name: "Boisseau", contributor_first_name: "Jay",

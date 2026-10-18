@@ -1,88 +1,187 @@
 # TX-11: August Pfluger — Campaign Spending as a Portrait of the Donor Class
 
-*A look at the fine dining, ski-town retreats, chauffeured cars, and donor swag paid for by August Pfluger's campaign committees since his first race in 2020, and what it says about who his political operation actually serves.*
+*The fine dining, ski-town retreats, chauffeured cars, ballpark suites and donor swag paid for by August Pfluger's campaign committees since his first race in 2020, and what they say about who his political operation serves.*
 
 ## The short version
 
-Since August Pfluger first filed for Congress in 2019, his four campaign committees have spent **$1,156,400.70** on steakhouses, private clubs, ski-resort lodges, golf-club rentals, chauffeured cars, and gifts for donors — out of **$22,464,516.63** in total itemized spending across every committee and every cycle. That's **5.15%**, or about a dollar in every twenty.
+Since August Pfluger first filed for Congress in 2019, his four committees have spent **$1,509,708.83** on a recognizable kind of thing: steakhouses, private clubs, ski-resort lodges, beach resorts, golf clubs, chauffeured cars, ballgame tickets, and gifts for donors. The four committees are his campaign, his leadership PAC (Raptor PAC), and two joint fundraising committees. Against **$24,083,056.66** in total itemized spending across every committee and every cycle, that is **6.27%**, about one dollar in every sixteen.
 
-But that share isn't flat — it's climbing fast, and it's climbing with Pfluger's own political rise. In the 2020 cycle, when he was a first-time candidate, this kind of spending was **0.30%** of the budget. By 2022 it was **2.25%**. By 2024 — his first cycle after being named chair of the Republican Study Committee — it hit **6.50%**. In the 2026 cycle it's **7.22%**, the highest yet. Add the 2024 and 2026 cycles together and you get **$1,030,501.73**, or **89%** of everything this report catalogues, all inside the most recent four years.
+The share hasn't held steady. It has grown along with Pfluger's own rise:
+- In the 2020 cycle, as a first-time candidate, this kind of spending was **0.30%** of the budget.
+- In 2022 it was **2.76%**.
+- In 2024 it was **7.97%**.
+- In the 2026 cycle it is **8.32%**, the highest yet. This is his first cycle as chairman of the House Republican Study Committee, a post he took in January 2025.
 
-None of this is illegal. It's also, almost entirely, not paid for out of Pfluger's own pocket — it's paid for with money donors gave the campaign, spent largely on *courting more donors*. That loop — oil money in, steakhouse dinners and ski weekends for oil money out — is the actual story here, and it's a story that's gotten bigger every single cycle Pfluger has run.
+Together, the 2024 and 2026 cycles account for **$1,356,551.66**, or **90%** of everything this report catalogs.
+
+None of this is illegal. Almost none of it is paid for out of Pfluger's own pocket, either. It's paid for with money donors gave the campaign, and it is spent largely on *courting more donors*. That loop is the story here: oil money comes in, and steakhouse dinners and ski weekends for oil money go out. It has gotten bigger nearly every cycle Pfluger has run.
 
 ## Who's paying for the filet mignon
 
-Before getting to what the money bought, it's worth a quick word on where it came from. Pfluger represents TX-11 — West Texas, anchored by the Permian Basin oil patch — and his donor list reads like a directory of Permian operators. The single largest identifiable donor across every committee and cycle is **Syed Javaid Anwar**, president/CEO of Midland-based **Midland Energy, Inc.** — a Pakistani immigrant turned Permian Basin oil titan who has also poured millions into Governor Greg Abbott's campaigns and sits on the Texas Higher Education Coordinating Board by Abbott's appointment ([E&E News](https://www.eenews.net/articles/major-texas-oil-donor-emerges-this-cycle-who-is-he/); [Bloomberg Government](https://news.bgov.com/bloomberg-government-news/oil-titans-hildebrand-anwar-break-for-trump-in-cash-race)). FEC's own donor-name matching splits his giving across several near-identical entries — "Anwar, Syed Javaid" and "Anwar, Syed J," with employer and occupation fields filed in different order in different years — but taken together, Anwar's household has given this operation somewhere north of **$900,000** since 2020. Right behind him: the Mabee family of Midland ($152,600 and $147,000), a cluster of Permian-adjacent Fort Worth and Midland oil families (Sellers, Campbell, Crump), and PAC checks from Koch Industries, Valero, and the National Cattlemen's Beef Association. Individual and PAC gifts to Pfluger's committees total well over $17 million since 2020.
+Before getting to what the money bought, a quick word on where it came from. Pfluger represents TX-11, anchored in Midland, Odessa and San Angelo in the Permian Basin oil patch. The redrawn map also takes in a strip of North Austin, most of Pflugerville, and parts of Round Rock, Cedar Park and Leander. His donor list reads like a directory of Permian operators.
+
+The largest donor across every committee and cycle is **Syed Javaid Anwar**, president and CEO of Midland-based **Midland Energy, Inc.** He is a Permian Basin oilman who has also given heavily to Gov. Greg Abbott's campaigns ([E&E News](https://www.eenews.net/articles/major-texas-oil-donor-emerges-this-cycle-who-is-he/); [Bloomberg Government](https://news.bgov.com/bloomberg-government-news/oil-titans-hildebrand-anwar-break-for-trump-in-cash-race)). The FEC's donor records split his giving across three spellings of his name, but together they come to **$979,300**. Adding his son Ryan and Jenissa Anwar, the household has given Pfluger's committees **$1,017,900** since 2020.
+
+Behind him come:
+- the Mabee family of Midland ($152,600 and $147,000);
+- a cluster of Fort Worth and Midland oil families (Sellers, Campbell, Crump);
+- PAC checks from Marathon Petroleum, Valero, Koch Industries, and the National Cattlemen's Beef Association.
+
+Altogether, itemized individual and PAC gifts to Pfluger's committees total **$17.66 million** since 2020.
 
 That's the raw material. What follows is where a meaningful and growing slice of it went back out the door.
 
-## Fine dining: a $447,000 tab, and getting bigger every cycle
+## Fine dining: a $552,000 tab, and climbing
 
-Across every committee and cycle, Pfluger's operation has spent **$447,258.39** at restaurants that fit a clear pattern: white-tablecloth steakhouses, private-club dining rooms, and DC's fundraising-circuit favorites, not the rubber-chicken constituent lunch. In 2020 this line item was **$3,786.60**. By 2026 it's **$249,574.97** — a 65-fold increase.
+Across every committee and cycle, Pfluger's operation has spent **$551,882.52** at restaurants that fit a clear pattern. These are white-tablecloth steakhouses, private-club dining rooms, and Washington's fundraising-circuit favorites, not the rubber-chicken constituent lunch. In the 2020 cycle this line was **$3,786.60**. In the 2026 cycle so far it is **$298,137.17**, nearly 80 times as much.
 
-**The Capital Grille** — the steakhouse chain, not a diner — is the single most-visited spot in the entire dataset, appearing **125 times for $90,570.39** combined across its various filing-name spellings (`fec/C00753913/schedule_b-2026-08-15T11_48_19.csv:454`, `:481`, `:518`, and dozens more across all committees). **Oceanaire**, a DC seafood house, comes next at **$59,105.36** across 40 visits, including a **$7,849.14** single charge on 2026-01-22 (`C00753913/schedule_b:1122`). **Del Frisco's Double Eagle Steakhouse** shows up only 14 times but for **$44,315.15**, headlined by a single **$27,582.00** charge on 2025-01-19 — days after Pfluger was sworn in for his current term (`C00719294/schedule_b-2026-08-15T11_55_08.csv:8938`).
+**The Capital Grille**, the steakhouse chain, is the most-visited restaurant in the entire dataset. It appears **125 times for $90,570.39** across its filing-name spellings, with checks running as high as **$3,570.35** on 2024-12-06 (`fec/C00719294/schedule_b-2026-10-18T10_21_28.csv:8776`).
 
-**Ocean Prime** billed **$40,003.61** across 33 visits; **Mi Vida**, a Mexican fine-dining spot on the DC waterfront, billed **$28,673.48** over 8 visits; **Occasions Caterers**, an upscale DC event-catering firm, billed **$22,529.19** across just 3 charges, including a **$19,610.30** single event on 2024-08-21 (`C00753913/schedule_b:692`); and **Fiola Mare**, a Georgetown waterfront Italian spot, took **$22,448.91** over 13 visits.
+Close behind is the **Capitol Hill Club**, the Republican members-only club a block from the Capitol. It billed **$60,214.83 across 98 charges**. They include a **$7,476.70** event on 2023-10-13 (`C00719294/schedule_b:5859`) and a **$7,080.23** catering bill on 2025-05-12 (`:8846`). The club was still billing in the third quarter of 2026, including **$3,412.54** on 2026-08-07 (`fec/C00719294/efile-2026-10-18T10_21_47.csv:213`).
 
-A few charges are worth calling out just for the color they add. **Nusr-Et Steakhouse Miami** — the Brickell Avenue outpost of celebrity chef Nusret Gökçe, better known online as "Salt Bae," globally famous for gold-leaf-garnished, four-figure tomahawk steaks — billed **$7,538.56** across 5 visits. **Joe's Seafood, Prime Steak & Stone Crab**, a Miami/DC power-lunch institution, billed $7,465.86. **Victor's Cafe**, a storied Cuban restaurant near Manhattan's theater district, billed $20,047.87 across 6 visits — a New York stop on what is otherwise an almost entirely DC-and-Texas circuit.
+**Oceanaire**, a Washington seafood house, billed **$59,105.36** across 40 visits, including **$7,849.14** on 2026-01-22 (`fec/C00753913/schedule_b-2026-10-18T10_29_07.csv:1122`). **Del Frisco's Double Eagle Steakhouse** appears 17 times under five spellings, one of them "Del Fresco," for **$50,848.03**. That figure is headlined by a single **$27,582.00** catering charge on 2025-01-19, days after Pfluger was sworn in for his current term (`C00719294/schedule_b:8938`). **Ocean Prime** billed **$48,026.46** across 40 visits.
 
-Rounding out the list: **AMA Restaurant** ($19,653.47, 14 visits), **Trattoria Alberto** ($13,100.99), **Tosca** ($11,618.82), **Jackie American Bistro** ($10,125.00 over just 2 charges), **Mastro's Steakhouse** ($9,646.62), **Bob's Steak & Chop House** ($6,745.36), and DC's historic **Old Ebbitt Grill** ($6,755.96), five minutes' walk from the White House. Nearly every one of these charges is filed under the FEC's "Solicitation and Fundraising Expenses" or "Campaign Event Expenses" categories — meaning the campaign itself is telling the FEC these meals are for raising money, not running the congressional office.
+Further down the list:
+- **Mi Vida** (Washington waterfront): $28,673.48 over 8 visits
+- **Occasions Caterers**: $22,529.19 over 3 charges, including a **$19,610.30** event on 2024-08-21 (`C00753913/schedule_b:692`)
+- **Fiola Mare** (Georgetown): $22,448.91 over 13 visits
+- **Joe's Seafood, Prime Steak & Stone Crab**: $21,979.72 over 11 visits, including a **$13,679.22** catering bill on 2026-03-06 (`C00719294/schedule_b:8906`)
+- **Trattoria Alberto**: $21,702.43
+- **Victor's Cafe**, the storied Cuban restaurant near Manhattan's theater district: $20,047.87 over 6 visits
+- **AMA Restaurant**: $19,653.47
+- **Tosca**: $11,618.82
+- **Jackie American Bistro**: $10,125.00 over just 2 charges
+- **Mastro's Steakhouse**: $9,646.62
+- **Old Ebbitt Grill**, five minutes' walk from the White House: $6,755.96
+- **Charlie Palmer Steak**: $6,179.34
+
+For color, there's **Nusr-Et Steakhouse Miami** ($7,538.56 over 5 visits). It is the Brickell Avenue outpost of the chef known online as "Salt Bae," famous for gold-leaf-garnished, four-figure tomahawk steaks.
+
+Nearly every one of these charges is filed under the FEC's "Solicitation and Fundraising Expenses" or "Campaign Event Expenses" categories. In other words, the campaign itself tells the FEC these meals are for raising money, not for running the congressional office.
 
 ## Retreats and resorts: courting donors in ski boots and beach sandals
 
-The single biggest luxury category is lodging: **$568,017.76** across 247 charges at hotels, resorts, and private clubs, and here the pattern isn't just DC — it's a rotating circuit of some of the country's most exclusive vacation addresses.
+The biggest luxury category is lodging and venues: **$702,059.54** across 278 charges at hotels, resorts and private clubs. The pattern here isn't just Washington. It's a rotating circuit of some of the country's most exclusive vacation addresses.
 
-**Ritz-Carlton** properties are the largest single brand, at **$136,036.08** combined across 39 charges. The biggest chunk of that is a single **$79,815.05** "LODGING" charge to the Ritz-Carlton Pentagon City — a five-star, 20-minute drive from the Capitol — on 2024-11-13, right after Pfluger's re-election, plus a **$22,804.30** "ROOM BLOCK DEPOSIT" a week later (`C00753913/schedule_b:718`, `:696`). That single hotel cluster alone is **$102,619.35**.
+- **Ritz-Carlton properties: $137,161.08 across 40 charges.** This is the largest single brand. Most of it is one **$79,815.05** "LODGING" charge at the Ritz-Carlton Pentagon City on 2024-11-13, right after Pfluger's re-election, plus a **$22,804.30** "ROOM BLOCK DEPOSIT" a week later (`C00753913/schedule_b:718`, `:696`).
+- **St. Joe Resort / WaterColor Inn: $126,136.98 across 26 charges.** WaterColor Inn is a beachfront resort on the Florida Panhandle's 30A corridor and one of the few Forbes-recommended hotels in the region ([WaterColor Inn](https://www.watercolorresort.com/about-us)). The charges include:
+  - $24,200.06 in September 2024 (`C00719294/schedule_b:5925`)
+  - $37,819.04 for "facility rental & catering" in October 2025 (`C00753913/schedule_b:1146`)
+  - **$30,299.62** for "lodging, facility rental, catering" at WaterColor Inn on 2026-07-30 (`fec/C00753913/efile-2026-10-18T10_29_44.csv:75`)
+- **Stein Eriksen Lodge: $108,031.77 across 14 charges in three separate cycles.** It is a five-star ski-in/ski-out resort at Deer Valley in Park City, Utah, where rooms commonly run $500–$900 a night and suites top $2,900 ([Kayak](https://www.kayak.com/Park-City-Hotels-Stein-Eriksen-Lodge.36100.ksp)). The big charges:
+  - $12,765.61 in 2022 (`C00719294/schedule_b:2788`)
+  - $38,467.39 in catering in 2024 (`:5945`)
+  - $43,959.03 for facility rental and catering in August 2025 (`C00753913/schedule_b:1148`)
+- **The broader Deer Valley cluster: another $65,683.26 across 32 charges.** This covers the resort itself, the Montage Deer Valley, The Chateaux and related properties. It includes a curious **$25,000.00** payment to the Montage in 2022 filed as "Advertising Expenses" rather than lodging (`C00719294/schedule_b:2804`). The **St. Regis** properties in Deer Valley, Washington and Aspen add **$32,484.12**.
+- **The InterContinental Willard: $48,387.24 across four charges.** The Willard is Washington's historic luxury hotel two blocks from the White House. The four charges came over the Fourth of July week of 2026: **$28,365.00** on July 2 and three separate **$6,674.08** charges on July 5 (`C00719294/efile:500`, `:418`, `:526`, `:537`).
+- **Natural Retreats**, a luxury vacation-rental company: one **$27,150.53** "facility rental and catering" charge near Charlottesville, Va., on 2026-04-20 (`C00753913/schedule_b:1142`).
+- **Omni properties: $47,812.32 across 36 charges.** These are the historic Omni Homestead Resort in Virginia's Allegheny Mountains, a National Historic Landmark that has hosted two dozen U.S. presidents ([Historic Hotels of America](https://www.historichotels.org/us/hotels-resorts/the-omni-homestead-resort/history.php)); the Omni PGA Frisco golf resort; and the Omni Dallas.
+- **JW Marriott / Essex House properties:** $32,806.15, including the JW Marriott Essex House on Central Park South in Manhattan.
+- **Four Seasons properties:** $25,363.48, across Dallas, Orlando, Washington and elsewhere.
 
-**Stein Eriksen Lodge**, a five-star ski-in/ski-out resort at Deer Valley in Park City, Utah, is next at **$108,031.77** across 14 charges spanning three separate cycles — a **$12,765.61** lodging-and-facility-rental charge in 2022 (`C00719294/schedule_b:2788`), a **$38,467.39** catering charge in 2024 (`:5945`), and a **$43,959.03** facility-rental-and-catering charge in 2025 (`C00753913/schedule_b:1148`). Rooms at Stein Eriksen commonly run $500–$900 a night, with suites topping $2,900 ([Kayak](https://www.kayak.com/Park-City-Hotels-Stein-Eriksen-Lodge.36100.ksp)).
+Then there's the golf:
+- **Baltusrol Golf Club** in Springfield, N.J. is a private club that has hosted seven U.S. Opens. It has an initiation fee near $150,000 and roughly $18,500 in annual dues ([PrivateIQ](https://www.privateiq.golf/clubs/new-jersey/springfield/baltusrol-golf-club-springfield-nj/membership-cost)). It billed **$16,988.10** across 11 charges, the largest $10,297.22 for "facility rental" on 2025-08-19 (`C00753913/schedule_b:1127`).
+- Smaller entries include Fort Worth's **Colonial Country Club** ($866.00) and $850.00 in green fees at **Hollow Brook Golf Club** in New York's Hudson Valley in August 2026.
 
-The **St. Joe Resort/WaterColor Inn** cluster — a AAA Four-Diamond beachfront resort on Florida's 30A corridor, one of the only Forbes-recommended hotels in the Florida Panhandle ([WaterColor Inn](https://www.watercolorresort.com/about-us)) — comes to **$95,837.36** across 25 charges spanning 2022 through 2026, including a **$37,819.04** "facility rental & catering" charge in October 2025 (`C00753913/schedule_b:1146`) and a **$24,200.06** charge the year before (`C00719294/schedule_b-2026-08-15T11_55_08.csv:5925`). The broader **Deer Valley** cluster (the resort itself, "Montage Deer Valley," "The Chateaux," and related properties) adds another **$65,683.26** across 32 charges, including a curious **$25,000.00** payment to Montage Deer Valley in 2022 filed under "Advertising Expenses" rather than lodging (`C00719294/schedule_b-2026-08-15T11_55_08.csv:2804`).
-
-**Omni** properties — the historic Omni Homestead Resort in Virginia's Allegheny Mountains (a National Historic Landmark that's hosted 24 U.S. presidents, per [Historic Hotels of America](https://www.historichotels.org/us/hotels-resorts/the-omni-homestead-resort/history.php)), the newer Omni PGA Frisco golf resort, and the Omni Dallas — together billed **$45,507.10** across 32 charges. **St. Regis** properties (Deer Valley and Washington, DC) add **$32,484.12**; **JW Marriott/Essex House** properties (including the JW Marriott overlooking Central Park South in Manhattan) add **$30,754.36**; and the **Four Seasons** brand, across Dallas, Orlando, and elsewhere, adds **$25,363.48**.
-
-Then there's the golf. **Baltusrol Golf Club** in Springfield, New Jersey — a private, invitation-only club that has hosted seven U.S. Opens and two PGA Championships, with an initiation fee near $150,000 and roughly $18,500 in annual dues ([PrivateIQ](https://www.privateiq.golf/clubs/new-jersey/springfield/baltusrol-golf-club-springfield-nj/membership-cost)) — billed **$16,988.10** across 11 charges. Fort Worth's **Colonial Country Club**, home of the PGA Tour's annual Charles Schwab Challenge, billed a modest $866.00. Houston's Forbes Five-Star **Post Oak Hotel** billed $5,166.14, and a single **$5,299.99** charge went to **Wynn Las Vegas**.
+Rounding out the circuit:
+- **Horseshoe Bay Resort** in the Texas Hill Country: $8,078.61
+- **The Las Colinas Resort**: $7,535.12
+- **The Venetian** in Las Vegas: $6,258.65
+- **Wynn Las Vegas**: $5,299.99
+- Houston's Forbes Five-Star **Post Oak Hotel**: $5,166.14
 
 ## Getting there in style
 
-None of this is much good if you have to drive yourself, and the committees have spent **$81,469.53** across 75 charges making sure nobody had to. **BLS Limo Group** is the biggest vendor by far, at **$39,558.00** across 10 charges, including a single **$17,286.00** "transportation" charge on 2025-02-13 (`C00753913/schedule_b:1138`) and two $5,555.00 "charter bus rental" charges days apart in June 2025. **Savoya**, a national black-car and chauffeur service marketed to corporate and political clients, billed **$12,471.99** across 13 charges. **Jake's Limo** billed a single **$5,834.15** charge in 2022 (`C00749481/schedule_b-2026-08-15T11_53_07.csv:568`), and smaller, repeated charges went to **Reston Limousine**, **Snow Country Limousine** (the Park City ski-trip transportation), **Carey Limousine**, **Dallas Taxi and Limo** (evidently a standing account), and **MK Black Car Service**.
+None of this is much good if you have to drive yourself. The committees have spent **$83,981.34** across 77 charges making sure nobody had to.
+
+- **BLS Limo Group** is the biggest vendor by far: **$40,518.00** across 11 charges. That includes a single **$17,286.00** "transportation" charge on 2025-02-13 (`C00753913/schedule_b:1138`) and two **$5,555.00** "charter bus rental" charges three days apart in June 2025 (`C00719294/schedule_b:8832`, `:8831`).
+- **Savoya**, a national black-car and chauffeur service marketed to corporate and political clients, billed **$14,983.80** across 15 charges.
+- **Jake's Limo** billed a single **$5,834.15** charge in 2022 (`fec/C00749481/schedule_b-2026-10-18T10_25_51.csv:568`).
+- Smaller, repeated charges went to:
+  - **Reston Limousine** ($5,568.76)
+  - **Snow Country Limousine**, the Park City ski-trip transportation, filed under two spellings ($5,341.03)
+  - **Carey Limousine**
+  - **Dallas Taxi and Limo**, evidently a standing account
+  - a handful of other black-car services
+
+## Box seats and big nights out
+
+A newer line on the ledger is entertainment: **$112,721.86** across 22 charges.
+
+- **RLK Co. of Aledo, Texas: $50,000.00 in two payments in September 2026.** These are the largest. The campaign filed them as "ENTERTAINMENT": $40,000 on 2026-09-02 and $10,000 on 2026-09-23 (`C00719294/efile:218`, `:307`). The filing doesn't say what the entertainment was.
+- **Nationals Park: $20,466.16 across 11 charges** for "event tickets," including **$8,160.00** on 2026-03-13 (`C00719294/schedule_b:8856`).
+- **Magnum Entertainment Group:** a single **$15,000.00** ticket charge on 2024-06-28 (`C00753913/schedule_b:686`).
+- **Capital One Arena,** home of Washington's NBA and NHL teams: **$14,432.42**, mostly a **$13,500.00** "catering and facility rental" charge on 2023-02-10 (`C00719294/schedule_b:5907`).
+- **Al Brooks Tickets:** $6,660.00.
+- **The Texas Rangers:** $6,163.28.
 
 ## Trinkets for the donor class
 
-Not every luxury dollar bought a meal or a room. Campaigns routinely buy small gifts for supporters and staff, and Pfluger's committees have spent **$59,655.02** on items filed as "SUPPORTER GIFTS" — officially bucketed by the FEC as "Campaign Materials," which also covers yard signs and bumper stickers, but the vendor list here skews upmarket, and it's grown sharply in the current cycle: from $1,823.63 in 2020 to $47,480.52 in 2026 alone.
+Not every luxury dollar bought a meal or a room. Campaigns routinely buy small gifts for supporters and staff. Pfluger's committees have spent **$59,063.57** on items filed as "SUPPORTER GIFTS." The FEC officially buckets these as "Campaign Materials," which also covers yard signs and bumper stickers, but the vendor list here skews upmarket. It has also grown sharply: from $1,823.63 in the 2020 cycle to **$46,889.07** in the 2026 cycle alone.
 
-**Macy's** (the Fair Oaks, Virginia location) billed **$10,541.70** across 10 charges, including two identical $2,432.70 charges on the same day (`C00719294/schedule_b-2026-08-15T11_55_08.csv:8688`, `:8689`). **House Gift Shop** — the Capitol's own retail operation — billed $8,023.90 across 28 small charges. **Del Ray Monograms**, an Alexandria, Virginia monogramming shop, billed **$7,780.00** across 3 charges. **Man Cave Custom Gifts**, a San Angelo shop, billed $7,751.72. **Criquet Shirts**, an Austin-based premium polo brand, billed a single **$5,170.68** charge in April 2026 (`C00753913/schedule_b-2026-08-15T11_48_19.csv:1110`). **M.L. Leddy's**, a legendary San Angelo boutique specializing in handmade Western boots and saddlery that has outfitted celebrities and presidents, billed $3,756.86. **Tuckernuck**, a DC-based women's boutique known for prep-style clothing, billed $3,032.25.
+- **Macy's** (Fair Oaks, Va.): **$10,541.70** across 10 charges, including two identical $2,432.70 charges on the same day (`C00719294/schedule_b:8688`, `:8689`)
+- **Man Cave Custom Gifts** (San Angelo): $8,135.05
+- **House Gift Shop**, the Capitol's own retail operation: $8,023.90 across 28 small charges
+- **Del Ray Monograms** (Alexandria, Va.): **$7,780.00** across 3 charges
+- **Criquet Shirts**, an Austin premium polo brand: **$5,170.68** in April 2026 (`C00753913/schedule_b:1110`), partly offset by a credit later in the year
+- **M.L. Leddy's**, San Angelo's storied maker of handmade Western boots and saddles: $4,135.74, including **$3,470.00** on 2025-11-18 (`C00749481/schedule_b:1330`)
+- **The Capitol Visitor Center gift shop**: $3,112.80
+- **Tuckernuck**, a Washington preppy-clothing boutique: $3,032.25
 
-Smaller amounts round out the pattern: custom-framing vendor **FrameTech** ($2,544.77 + $731.99 under a second filing name), **Cowboy Up Chocolates** ($2,029.85), **Chouquette Chocolates** ($763.20), **Kate Weiser Chocolate** ($238.28), **Holland Jewelry** ($622.44 combined), **Lucchese Bootmaker** ($259.80), **Cavender's Boot City** ($209.94), **Boot Barn** ($345.58), and **Apis World**, a Frisco, Texas gift vendor ($900.00). Some of this is genuinely modest — the House Gift Shop charges run as low as a few dollars — but the presence of a department-store account, boutique bootmakers, a monogrammer, and three separate chocolatiers on the same ledger as Capital Grille and Stein Eriksen Lodge fits the same throughline as everything above it.
+The smaller amounts follow the same pattern:
+- custom framer **FrameTech** ($3,276.76 under two filing names)
+- **Cowboy Up Chocolates** ($2,029.85)
+- **Chouquette Chocolates** ($763.20)
+- **Kate Weiser Chocolate** ($238.28)
+- **Holland Jewelry** ($622.44 combined)
+- **Lucchese Bootmaker** ($259.80)
+- **Cavender's Boot City** ($209.94)
+- **Boot Barn** ($345.58)
+
+Some of this is genuinely modest; the House Gift Shop charges run as low as a few dollars. But the same ledger holds the Capital Grille and Stein Eriksen Lodge alongside a department-store account, boutique bootmakers, a monogrammer, and three separate chocolatiers. The gifts fit the same pattern as everything above.
 
 ## The math, laid plain
 
-| Category | Total (2020–2026) | 2026-cycle alone |
+| Category | Total (2020–2026) | 2026 cycle alone |
 |---|---:|---:|
-| Fine dining | $447,258.39 | $249,574.97 |
-| Retreats & resorts | $568,017.76 | $235,128.87 |
-| Luxury ground transport | $81,469.53 | $50,952.91 |
-| Donor gifts | $59,655.02 | $47,480.52 |
-| **Total** | **$1,156,400.70** | **$583,137.27** |
+| Fine dining | $551,882.52 | $298,137.17 |
+| Retreats & resorts | $702,059.54 | $347,298.27 |
+| Luxury ground transport | $83,981.34 | $53,464.72 |
+| Sports & entertainment | $112,721.86 | $61,644.50 |
+| Donor gifts | $59,063.57 | $46,889.07 |
+| **Total** | **$1,509,708.83** | **$807,433.73** |
 
-Against **$22,464,516.63** in total itemized spending across all four committees since 2019, that's **5.15%** overall — not the biggest line on the ledger; transfers between Pfluger's own committees, transfers to the National Republican Congressional Committee, and ordinary payroll dwarf it. But the trend line is the real finding: **0.30% → 2.25% → 6.50% → 7.22%**, cycle over cycle, as Pfluger has gone from a first-time West Texas candidate to chair of the House Republican Study Committee with three additional fundraising vehicles (Raptor PAC, and two successive joint fundraising committees) at his disposal. The luxury share of his spending hasn't just grown in dollar terms — it's grown as a *proportion* of an already-growing budget, every single cycle.
+Against **$24,083,056.66** in total itemized spending across all four committees since 2019, that is **6.27%** overall. It isn't the biggest line on the ledger. These things dwarf it:
+- money moving between Pfluger's own committees;
+- transfers to the National Republican Congressional Committee;
+- ordinary payroll.
 
-## What this actually says
+The trend line is the real finding: **0.30% → 2.76% → 7.97% → 8.32%**, cycle over cycle. Over that stretch Pfluger went from a first-time West Texas candidate to chairman of the Republican Study Committee, with Raptor PAC and two successive joint fundraising committees at his disposal. The luxury share hasn't just grown in dollars. It has grown as a *proportion* of an already-growing budget in every cycle.
 
-1. **The fundraising apparatus is the point, not a side effect.** Most of the dining and lodging charges above are filed by the campaign itself as "Solicitation and Fundraising" or "Campaign Event" expenses — not staff meals, not constituent outreach. The steakhouses and ski lodges *are* the fundraising operation.
+## What this says
 
-2. **The venues select for a donor, not a voter.** A $150,000-initiation golf club, a five-star ski lodge, a historic presidential retreat, a beachfront Forbes Four-Diamond resort — these aren't places an average TX-11 resident in Odessa or San Angelo will ever set foot in. They're built to be comfortable for exactly the kind of donor Pfluger's top contributor list shows: energy-industry executives and the PACs that represent them.
+1. **The fundraising apparatus is the point, not a side effect.** The campaign itself files most of the dining and lodging charges above as "Solicitation and Fundraising" or "Campaign Event" expenses, not staff meals or constituent outreach. The steakhouses and ski lodges *are* the fundraising operation.
 
-3. **This scaled up right alongside Pfluger's own rise in the House GOP.** The jump from a few thousand dollars in luxury spending in 2020 to well over half a million in the current cycle tracks almost exactly with his ascent from freshman member to Republican Study Committee chair — more committees, more joint fundraising vehicles, and a much bigger circuit of donors to entertain.
+2. **The venues select for a donor, not a voter.** A $150,000-initiation golf club, a five-star ski lodge, a historic presidential retreat, a beachfront resort on 30A, a Fourth of July week at the Willard: an average TX-11 resident in Odessa, San Angelo or Pflugerville will never set foot in these places. They are built to be comfortable for exactly the kind of donor on Pfluger's top contributor list: energy-industry executives and the PACs that represent them.
 
-4. **It's a closed loop.** Oil and gas money funds a campaign that spends a meaningful and growing share of it wining and dining more of the same donor class at venues most of those donors would recognize from their own personal lives. The transaction isn't really "candidate meets voter"; it's "campaign apparatus meets checkbook," repeated at Capital Grille tables and Deer Valley lodges instead of union halls or diners.
+3. **The spending grew right alongside Pfluger's rise in the House GOP.** It went from a few thousand dollars in 2020 to more than $800,000 in the current cycle. That tracks closely with his ascent from freshman member to Republican Study Committee chairman, which brought more committees, more joint fundraising vehicles, and a much bigger circuit of donors to entertain.
 
-5. **This is normal, not exceptional, campaign finance practice** — and that's arguably the more unsettling point. Nothing catalogued here appears to violate FEC rules; this is how modern congressional fundraising works across both parties. The "oligarchy" isn't a conspiracy in the shadows — it's an itemized, publicly filed, perfectly legal spreadsheet.
+4. **It's a closed loop.** Oil and gas money funds a campaign that spends a meaningful and growing share of it wining and dining more of the same donor class, at venues most of those donors would recognize from their own personal lives. The transaction isn't "candidate meets voter." It's "campaign apparatus meets checkbook," repeated at Capital Grille tables and Deer Valley lodges instead of union halls or diners.
+
+5. **This is normal, not exceptional, campaign finance practice, and that is arguably the more unsettling point.** Nothing cataloged here appears to violate FEC rules. This is how modern congressional fundraising works in both parties. The "oligarchy" isn't a conspiracy in the shadows. It's an itemized, publicly filed, perfectly legal spreadsheet.
 
 ## Caveats: yes, it's legal
 
-This is legal campaign spending, filed as required, and none of it is evidence of personal enrichment — FEC rules generally prohibit converting campaign funds to personal use, and the categories above (facility rental, catering, transportation, campaign materials) are the normal accounting language for donor-facing campaign events, not a scandal by themselves.
+This is legal campaign spending, filed as required, and none of it is evidence of personal enrichment. FEC rules generally prohibit converting campaign funds to personal use. The labels above (facility rental, catering, transportation, campaign materials) are the normal accounting language for donor-facing campaign events, not a scandal in themselves.
 
-The keyword-matching approach used to build this report can both over- and under-catch. One clear false positive was found and excluded: a Bonita Springs, Florida vendor called "Wynn Properties-Sunshine Executive Center" — an unrelated property-management company, not the Wynn Las Vegas casino brand — matched a "wynn properties" keyword and was removed ($6,009.00 across 4 charges). One data-entry oddity is worth flagging rather than hiding: a single $325.00 Snow Country Limousine charge is filed with a disbursement date of "2001-03-18," which is almost certainly a typo in Pfluger's own FEC filing (the report itself is a 2026 Q2 filing); this report counts it in the 2026 cycle rather than discarding it. A differently spelled or unlisted venue wouldn't appear in this report even if it belongs in one of these categories — this is a curated, evidence-based keyword list built from the actual vendor names in the data, not an exhaustive one. "Luxury" is an editorial judgment call about vendor names and venue reputations, not an FEC category — the FEC's own accounting labels for this spending (catering, lodging, facility rental, transportation, campaign materials) are the neutral categories; the framing in this report layers interpretation on top of that. Every dollar figure and vendor name above has been checked against the source spreadsheet at the cited file and line number.
+The keyword approach used to build this report can catch too much or too little.
+- **One false positive was excluded.** A Bonita Springs, Fla. vendor called "Wynn Properties-Sunshine Executive Center" is an unrelated office-suite company, not the Wynn Las Vegas casino brand. It matched a "wynn properties" keyword and was removed ($6,009.00 across 4 charges).
+- **One bad date.** A single $325.00 Snow Country Limousine charge carries a disbursement date of "2001-03-18," almost certainly a typo in the committee's own filing (`C00753913/schedule_b:888`). It is counted in the 2026 cycle rather than discarded.
+- **Savoya's 2026 lines.** Two of Savoya's 2026 charges are filed as "catering expense" rather than transportation. They are counted with the rest of that vendor.
+- **Venues the list may miss.** A venue spelled differently, or missing from the keyword list, wouldn't appear here even if it belongs. The list was built from the actual vendor names in the data, but it isn't exhaustive.
+- **"Luxury" is a judgment call.** It is an editorial reading of vendor names and venue reputations, not an FEC category. The FEC's own labels for this spending are the neutral categories; this report's framing layers interpretation on top of them.
+
+Every dollar figure and vendor name above was checked against the source spreadsheet at the cited file and line number.
 
 ---
 
@@ -90,47 +189,70 @@ The keyword-matching approach used to build this report can both over- and under
 
 *(This section is explicitly excluded from the report's word-count limit.)*
 
-**Report generated:** 2026-08-15T18:42:00Z (2026-08-15, 1:42 PM Central Daylight Time), by Claude Sonnet 5 (Anthropic), running as the "Claude Code" CLI agent inside a VS Code extension session, on behalf of user Tod Beardsley.
+**Report generated:** 2026-10-18T16:15:00Z (2026-10-18, 11:15 AM Central Daylight Time), by Claude Opus 5.5 (Anthropic, model ID `claude-opus-5-5`), running as Claude Code inside the VS Code extension, on behalf of user Tod Beardsley. The interface doesn't expose sampling settings such as temperature or maximum output tokens, so the session ran on its defaults.
 
 **Data sources:**
 
-- FEC Schedule B (disbursements) exports for all four of August Pfluger's known committees, freshly downloaded and stored under `tx-11/august-pfluger/fec/` as of 2026-08-15:
-  - `C00719294` — August Pfluger for Congress (principal committee) — `fec/C00719294/schedule_b-2026-08-15T11_55_08.csv`, covering disbursement dates 2019-09-18 through 2026-06-30
-  - `C00749481` — Raptor PAC (leadership PAC) — `fec/C00749481/schedule_b-2026-08-15T11_53_07.csv`, 2020-07-21 through 2026-06-30
-  - `C00753913` — Pfluger Victory Fund (the current joint fundraising committee) — `fec/C00753913/schedule_b-2026-08-15T11_48_19.csv`, 2020-09-22 through 2026-06-26 (one row's date field is corrupted to read "2001-03-18" — see Caveats)
-  - `C00840033` — PFriends of Pfluger (a smaller, earlier joint fundraising committee active 2023–2025, discovered in this data refresh) — `fec/C00840033/schedule_b-2026-08-15T11_42_47.csv`; contained no matches in any of this report's four keyword groups
-- This is the first time this repository holds multi-cycle FEC data for Pfluger (2020, 2022, 2024, and 2026 two-year transaction periods all present in the same per-committee directories) — a fuller history than any prior report on this candidate had available. Report scoped to all cycles present unless otherwise noted; the body highlights the 2024 and 2026 cycles specifically per the user's request.
-- All four committees' raw `efile-*.csv` disbursement submissions were also checked for a processed-export gap (the pattern found and documented in an earlier version of this report and in `tooling/vendor-keyword-scan.rb`'s header comments). As of this data refresh, no gap exists: every committee's processed `schedule_b` export and raw `efile` submissions cover the identical date range, so `--include-efile-gap` was still run (per the user's request to include both), but it contributed zero additional rows this time.
-- No House Ethics Committee data was used; personal financial disclosures don't cover campaign committee spending, which is the subject here.
+- FEC Schedule B (disbursement) exports for August Pfluger's four committees, exported by hand from fec.gov on 2026-10-18 and stored under `tx-11/august-pfluger/fec/`:
+  - `C00719294`, August Pfluger for Congress (principal committee): `schedule_b-2026-10-18T10_21_28.csv`
+  - `C00749481`, Raptor PAC (leadership PAC): `schedule_b-2026-10-18T10_25_51.csv`
+  - `C00753913`, Pfluger Victory Fund / Pfluger Victory Committee (joint fundraising committee): `schedule_b-2026-10-18T10_29_07.csv`
+  - `C00840033`, Pfriends of Pfluger (an earlier, smaller joint fundraising committee): `schedule_b-2026-10-18T10_33_38.csv`. It had no matches in any keyword group.
+- The processed exports cover every cycle from 2020 through 2026. They end on 2026-06-30 for the campaign and 2026-06-26 for the JFC. Raw `efile-*.csv` disbursement submissions extend both committees through 2026-09-30, so `--include-efile-gap` adds those third-quarter 2026 rows. Every gap-sourced row is cited above by its `efile-*.csv` file and line. The campaign's third-quarter efile contains an original filing and an amendment with identical rows (file numbers 2025566 and 2028678). The deduplication described under "Tooling" counts each charge once.
+- The committee directory `C00857649` carries a `CONNECTED` marker: an outside, multi-candidate joint fundraising committee. It is excluded from every figure here.
+- No House Ethics Committee data was used. Personal financial disclosures don't cover campaign committee spending, which is the subject here.
 
-**Tooling used (both pre-existing; no new tooling was needed):**
+**Tooling used:**
 
-- `tooling/analyze-candidate.rb` — run first, unmodified, to confirm baseline totals, spot-check for an efile coverage gap, and get an overview of top payees and spending by category:
+- `tooling/analyze-candidate.rb`, run first to confirm baseline totals and the efile coverage gap:
   ```
   ruby tooling/analyze-candidate.rb --fec-dir tx-11/august-pfluger/fec \
     --house-ethics-dir tx-11/august-pfluger/house-ethics --top 40
   ```
-- `tooling/vendor-keyword-scan.rb` — the existing line-referenced keyword-search tool built for the original version of this report, already supporting `--include-efile-gap` and (as of a bug fix documented in its own header, made while building the companion 2026-automotive report) correctly handling `--cycle` combined with the efile gap. No `--cycle` filter was applied for the primary run, since this report deliberately spans all cycles present. Vendor names for the keyword lists below were identified by first dumping every `recipient_name` in the dataset ranked by total dollar amount (a one-off Ruby script, not saved as tooling) and reading through it by hand — an evidence-based approach, rather than guessing at plausible venue names. Four keyword groups, run once across the full multi-cycle dataset:
+  Its combined itemized disbursements across all four committees ($24,083,056.66) are the denominator above.
+- `tooling/vendor-keyword-scan.rb` was run with no `--cycle` filter, since this report spans all cycles. **Two fixes were made to it during this run.**
+  - First, its efile gap scan had no deduplication. The original and amended third-quarter filings described above would therefore have counted every gap-window match twice. Gap rows are now deduplicated before matching. Duplicates are matched first by transaction ID, keeping the latest copy, then by date + amount + payee name.
+  - Second, that name-based pass is now limited by a shared helper (`tooling/lib/efile_dedup.rb`). It collapses only groups that span more than one filing, and it keeps every row from the newest one. Without that limit, it would have merged the three separate $6,674.08 Willard charges on 2026-07-05 into one.
+
+  Both fixes are documented in the script's header and covered by specs. The same helper now backs `analyze-candidate.rb` and `donor-keyword-scan.rb`.
+
+  Separately, the shared committee lister (`tooling/lib/fec_committees.rb`) now skips `CONNECTED`-marked directories, just as `analyze-candidate.rb` already does. Without that, the scan would have included a $2,399.66 Capitol Hill Club charge paid by the outside joint fundraising committee C00857649.
+
+  The keyword groups below are the ones from the original prompt's evidence-based vendor list. They gained a few additions found by dumping every dining, lodging, venue, transport, gift and entertainment payee in the current data, ranked by dollars, and reading through it by hand:
+  - **Spelling variants the original list missed:** "tratoria alberto," "del fresco," "joes stone crab," "horeshoe bay."
+  - **Venues of the same kind:** Charlie Palmer Steak, Capitol Hill Club, Boa Steakhouse, the InterContinental Willard, Natural Retreats, The Venetian, Las Colinas Resort, Hollow Brook Golf Club.
+  - **A fifth group, "Sports & Entertainment,"** under the prompt's "other luxury spending."
   ```
   ruby tooling/vendor-keyword-scan.rb --fec-dir tx-11/august-pfluger/fec --include-efile-gap --format json \
-    --group "Fine Dining=capital grille,del frisco,oceanaire,tosca,fiola mare,mi vida,ama restaurant,ocean prime,trattoria alberto,mastro,old ebbitt,jackie american bistro,occasions cafe,victor's cafe,victors cafe,nusret steakhouse,joe's seafood,bobby van's steakhouse,bobby vans steakhouse,stk steakhouse,truluck's,trulucks,bob's steak,bobs steak,bistro bis,hine restaurant,occidental restaurant,restaurant paradis,nick and sam's,kayne prime,cowboy prime steakhouse,carmine's italian,7th & l restaurant,blt prime,huntley taverne,cork & pig tavern" \
-    --group "Retreats & Resorts=stein erikson,stein eriksen,st joe resort,st. joe resort,deer valley,st. regis,st regis,ritz-carlton,ritz carlton,montage deer valley,four seasons,omni homestead,omni pga frisco,omni dallas,horseshoe bay resort,baltusrol,wynn las vegas,wynn properties,post oak hotel,essex house,jw marriott,watercolor inn,colonial country club" \
+    --group "Fine Dining=capital grille,del frisco,oceanaire,tosca,fiola mare,mi vida,ama restaurant,ocean prime,trattoria alberto,mastro,old ebbitt,jackie american bistro,occasions cafe,victor's cafe,victors cafe,nusret steakhouse,joe's seafood,bobby van's steakhouse,bobby vans steakhouse,stk steakhouse,truluck's,trulucks,bob's steak,bobs steak,bistro bis,hine restaurant,occidental restaurant,restaurant paradis,nick and sam's,kayne prime,cowboy prime steakhouse,carmine's italian,7th & l restaurant,blt prime,huntley taverne,cork & pig tavern,tratoria alberto,del fresco,joes stone crab,joe's stone crab,charlie palmer,capitol hill club,boa steakhouse" \
+    --group "Retreats & Resorts=stein erikson,stein eriksen,st joe resort,st. joe resort,deer valley,st. regis,st regis,ritz-carlton,ritz carlton,montage deer valley,four seasons,omni homestead,omni pga frisco,omni dallas,horseshoe bay resort,baltusrol,wynn las vegas,wynn properties,post oak hotel,essex house,jw marriott,watercolor inn,colonial country club,horeshoe bay,intercontinental the willard,willard intercontinental,natural retreats,the venetian,las colinas resort,hollow brook golf" \
     --group "Luxury Ground Transport=bls limo,savoya,carey limousine,dallas taxi and limo,mk black car,orlando black car,snow country limousine,snow county limousine,reston limousine,jake's limo,black car service,s&k limousine,snk limos,snk transportation,blc limo,moores limo,dial 7 car and limousine" \
-    --group "Donor Gifts=macy's,m.l. leddy,m l leddy,leddy's,lucchese,holland jewelry,holland's jewelry,chouquette,criquet shirts,tuckernuck,apis world,man cave custom gifts,del ray monograms,cowboy up chocolates,kate weiser chocolate,mr boots,boot barn,cavender's boot city,wace embroidery,frametech,house gift shop,capitol visitor center gift shop
+    --group "Donor Gifts=macy's,m.l. leddy,m l leddy,leddy's,lucchese,holland jewelry,holland's jewelry,chouquette,criquet shirts,tuckernuck,apis world,man cave custom gifts,del ray monograms,cowboy up chocolates,kate weiser chocolate,mr boots,boot barn,cavender's boot city,wace embroidery,frametech,house gift shop,capitol visitor center gift shop" \
+    --group "Sports & Entertainment=nationals park,capital one arena,texas rangers,al brooks tickets,magnum entertainment,rlk co"
   ```
-  Raw match counts: Fine Dining 356 rows/$447,258.39; Retreats & Resorts 251 rows/$574,026.76; Luxury Ground Transport 75 rows/$81,469.53; Donor Gifts 98 rows/$59,655.02.
+  Raw match counts and totals before exclusions:
 
-**Known adjustment made to the tool's raw output:** manual review of all 780 matched rows found one false positive — "WYNN PROPERTIES-SUNSHINE EXECUTIVE CENTER" (Bonita Springs, FL), matched by the `wynn properties` keyword intended for the Wynn Las Vegas casino resort, is actually an unrelated small property-management/executive-suite company; its 4 rows ($6,009.00) were excluded from the Retreats & Resorts total reported above ($574,026.76 raw → $568,017.76 as reported). This is exactly the kind of over-match the tool's own header comments warn about; it was caught by reviewing the full per-vendor breakdown of every match before writing prose, not by the tool itself.
+  | Group | Rows | Total |
+  |---|---:|---:|
+  | Fine Dining | 475 | $551,882.52 |
+  | Retreats & Resorts | 282 | $708,068.54 |
+  | Luxury Ground Transport | 77 | $83,981.34 |
+  | Donor Gifts | 102 | $59,063.57 |
+  | Sports & Entertainment | 22 | $112,721.86 |
 
-**Per-cycle and grand-total figures cited in this report** (the $1,156,400.70 total, the per-cycle percentages, and the brand-clustered subtotals like "Ritz-Carlton: $136,036.08") were computed by follow-up Ruby scripts, not saved as tooling since they were single-use rollups over the JSON output of the scan above. Cycle attribution for each matched row uses the FEC's own two-year-cycle convention (an odd calendar year belongs to the cycle ending the following even year) inferred from each row's `disbursement_date`, since the compact JSON match format doesn't carry the `two_year_transaction_period` field. The one row with a corrupted date (see Caveats) was manually assigned to the 2026 cycle rather than left to default to a nonsensical "2002" bucket. The $22,464,516.63 total-spending denominator comes directly from summing all four committees' non-memo itemized Schedule B rows (excluding `memo_code=X` sub-items, which are already included in their parent lump-payment row's total — see `analyze-candidate.rb`'s header comments for why this avoids double-counting).
+**Adjustment to the tool's raw output:** a hand review of every matched vendor found one false positive. "WYNN PROPERTIES-SUNSHINE EXECUTIVE CENTER" (Bonita Springs, Fla.) matched the `wynn properties` keyword intended for the Wynn Las Vegas resort, and its 4 rows ($6,009.00) are excluded from Retreats & Resorts: $4,259.00 in the 2024 cycle and $1,750.00 in 2026. That takes the category from $708,068.54 raw to $702,059.54 as reported.
 
-**Verification performed:** every dollar figure and file:line citation in the body of this report was checked against the source CSV directly (via `sed -n '<line>p' <file>`) before publication.
+**Per-cycle and cluster figures** were computed by single-use Ruby scripts over the scan's JSON output; they were not saved as tooling. These cover the cycle totals and percentages, and brand-cluster subtotals such as "Ritz-Carlton: $137,161.08." The scan's JSON doesn't carry the `two_year_transaction_period` field, so each row's cycle comes from its date using the FEC's convention: an odd calendar year belongs to the cycle ending the following even year. The one corrupted-date row is assigned to the 2026 cycle. The per-cycle denominators sum each committee's non-memo itemized Schedule B rows by `two_year_transaction_period`, plus the deduplicated non-memo efile gap rows. Memo-coded sub-items are excluded from the denominator because their parent lump payments already include them. Like the original report's denominator, these totals include transfers between Pfluger's own committees.
 
-**Web research:** conducted to add reader-facing context on named venues, respecting each site's terms of use — Nusr-Et Steakhouse Miami's menu and "Salt Bae" branding, the Omni Homestead Resort's history, WaterColor Inn's Forbes/AAA rating and ownership by the St. Joe Company, Ritz-Carlton Pentagon City's room rates, Stein Eriksen Lodge's rates (reused from this report's earlier research), Baltusrol Golf Club's membership cost, and Syed Javaid Anwar's public profile as a Permian Basin donor. Sources are linked inline in the report body above.
+**Verification performed:** every dollar figure and file:line citation in the body was checked against the source CSV row before publication.
 
-**Model configuration:** default Claude Code agent settings for this session; no unusual temperature/token-limit configuration was requested or applied.
+**Web sources:** the venue and donor descriptions linked inline were not re-fetched from the live web for this run. The descriptions of the Willard, Natural Retreats and the Capitol Hill Club come from the model's general knowledge. So does Pfluger's Republican Study Committee chairmanship; verify both independently. The description of TX-11's boundaries was supplied by the repository owner.
 
-**Verbatim prompt this report was generated from:**
+**Prompt for this run:**
+
+> Roll through the reports in tx-11/august-pfluger/reports/2026-* and regenerate these with the new data available, otherwise keeping the original prompts as recorded. Don't compare to prior runs of the analysis, keep everything in the present tense for a new reader.
+
+**Original prompt, as recorded for this report:**
 
 > Review the current luxury-spending.md report, and re-run the analytics now that we have new and updated tooling and refreshed all the disclosure material. Rename it 2026-luxury-spending.md. Use (and report) this prompt, and do not explain differences between the current version and new version of the report, assuming the reader is reading this for the first time. Include both the schedule filings and the efile raw data. Focus on the 2024-2026 election cycle, but do not limit retporting to just that cycle, we want to see the full picture of luxury spending since Pfluger's first 2020 election. Here is the rest of the original prompt:
 >
@@ -150,8 +272,8 @@ The keyword-matching approach used to build this report can both over- and under
 
 **Limitations and things a human should double-check before citing this report further:**
 
-- This report now spans four FEC cycles (2020, 2022, 2024, 2026), but it's still a snapshot as of the 2026-08-15 data refresh — later filings in the current cycle aren't reflected.
-- Keyword matching is a blunt instrument, built here from an evidence-based read of the actual vendor list rather than a guessed list, but still not guaranteed exhaustive — a differently spelled or unlisted venue wouldn't surface even if it belongs in one of these categories.
-- "Luxury" is an editorial judgment call about vendor names and venue reputations, not an FEC category — the FEC's own accounting labels (catering, lodging, facility rental, transportation, campaign materials) are the neutral underlying data; this report's framing layers interpretation on top of that, as instructed by the user.
-- No attempt was made to verify whether any of this spending exceeds House ethics or FEC personal-use rules — nothing here suggests it does, and the report does not claim otherwise.
-- This report does not compare Pfluger's luxury-spending share to any other member of Congress, since this repository does not have comparable multi-candidate data collected.
+- This report spans four FEC cycles (2020, 2022, 2024, 2026) as of the 2026-10-18 data export. Filings after Sept. 30, 2026 aren't reflected.
+- Keyword matching is a blunt instrument. The list was built from the actual vendor list, but it is not guaranteed to be exhaustive.
+- "Luxury" is an editorial judgment about vendor names and venue reputations, not an FEC category. The FEC's own labels are the neutral underlying data, and this report's framing layers interpretation on top of them, as the prompt instructs.
+- No attempt was made to check whether any of this spending exceeds House ethics or FEC personal-use rules. Nothing here suggests it does, and the report doesn't claim otherwise.
+- This report doesn't compare Pfluger's luxury-spending share to any other member of Congress, because the repository has no comparable multi-candidate data.

@@ -1,0 +1,54 @@
+Total raisedBrowse receipts
+Coverage dates: 01/01/2025 to 09/30/2026
+Total receipts	$5,014,136.43
+Total contributions	$4,961,315.00
+Total individual contributions	$3,696,915.00
+Itemized individual contributions	$3,694,850.00
+Unitemized individual contributions	$2,065.00
+Party committee contributions	$0.00
+Other committee contributions	$1,264,400.00
+Presidential public funds	$0.00
+Transfers from affiliated committees	$0.00
+All loans received	$0.00
+Loan repayments received	$0.00
+Offsets to operating expenditures	$52,821.43
+Candidate refunds	$0.00
+Other Receipts	$0.00
+Total transfers	$0.00
+Nonfederal transfers	$0.00
+Levin funds	$0.00
+Total federal receipts	$5,014,136.43
+Newly filed summary data may not appear for up to 48 hours.
+
+Total spentBrowse disbursements
+Coverage dates: 01/01/2025 to 09/30/2026
+Total disbursements	$4,935,089.19
+Operating expenditures	$776,971.48
+Allocated operating expenditures - federal share	$0.00
+Allocated operating expenditures - nonfederal share	$0.00
+Other federal operating expenditures	$776,971.48
+Transfers to affiliated committees	$4,133,867.71
+Contributions to other committees	$0.00
+Independent expenditures	$0.00
+Party coordinated expenditures	$0.00
+Loans made	$0.00
+Loan repayments made	$0.00
+Total contribution refunds	$23,250.00
+Individual refunds	$23,250.00
+Political party refunds	$0.00
+Other committee refunds	$0.00
+Other disbursements	$1,000.00
+Total federal election activity	$0.00
+Allocated federal election activity - federal share	$0.00
+Allocated federal election activity - Levin share	$0.00
+Federal election activity - federal only	$0.00
+Total federal disbursements	$4,935,089.19
+Newly filed summary data may not appear for up to 48 hours.
+
+Cash summary
+Coverage dates: 01/01/2025 to 09/30/2026
+Beginning cash on hand	$64,727.42
+Ending cash on hand	$143,774.66
+Debts/loans owed to committee	$0.00
+Debts/loans owed by committee	$0.00
+Newly filed summary data may not appear for up to 48 hours.

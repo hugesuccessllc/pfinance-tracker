@@ -63,7 +63,8 @@
 #        to a political-committee line), which pass 1 alone would miss.
 #   Gap rows are further restricted to line_number 11AI (individual) or 11C (political
 #   committee) — the raw-schedule equivalent of DONOR_LABELS, per analyze-candidate.rb's
-#   EFILE_INDIVIDUAL_LINES/EFILE_COMMITTEE_LINES — and matched against entity_type (IND/PAC).
+#   EFILE_INDIVIDUAL_LINES/EFILE_COMMITTEE_LINES — and matched against entity_type (IND or
+#   ORG on 11AI; PAC, PTY, COM, or CCM on 11C — see analyze-candidate.rb gotcha 11).
 #   Matches sourced this way are tagged "[efile, not yet in processed export]" in text output
 #   (or "source": "efile-gap" in JSON).
 #
@@ -78,6 +79,7 @@
 require_relative "lib/bootstrap"
 require_relative "lib/fec_committees"
 require_relative "lib/fec_labels"
+require_relative "lib/efile_dedup"
 
 require "csv"
 require "optparse"
@@ -89,6 +91,10 @@ require "date"
 # same allowlist. See that file for why a second top-level copy here was a footgun.
 EFILE_INDIVIDUAL_LINES = %w[11AI].freeze
 EFILE_COMMITTEE_LINES = %w[11C].freeze
+# Same entity_type sets as analyze-candidate.rb (see its gotcha 11): ORG (LLCs, practices) also
+# files on 11AI, and committee-like givers on 11C aren't always "PAC" (PTY, COM, CCM).
+EFILE_INDIVIDUAL_LINE_ENTITY_TYPES = %w[IND ORG].freeze
+EFILE_COMMITTEE_ENTITY_TYPES = %w[PAC PTY COM CCM].freeze
 
 DonorMatch = Struct.new(:group, :keyword, :committee_id, :committee_name, :file, :line, :date,
                          :contributor_name, :contributor_employer, :contributor_occupation,
@@ -188,12 +194,13 @@ def scan_efile_gap(committee_dir, cid, options, matches)
   natural_key = lambda do |(d, row, _, _)|
     [d, row["contribution_receipt_amount"].to_s.strip, efile_contributor_name(row)]
   end
-  pass2 = pass1.group_by(&natural_key).map { |_, group| group.max_by { |(_, row, _, _)| row["load_timestamp"].to_s } }
+  pass2 = EfileDedup.collapse_natural_key_groups(pass1, row_of: ->(item) { item[1] }, key: natural_key)
 
   pass2.each do |(d, row, path, lineno)|
     is_individual = row["entity_type"] == "IND"
-    is_committee = row["entity_type"] == "PAC"
-    next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) && is_individual) ||
+    is_committee = EFILE_COMMITTEE_ENTITY_TYPES.include?(row["entity_type"])
+    next unless (EFILE_INDIVIDUAL_LINES.include?(row["line_number"]) &&
+                 EFILE_INDIVIDUAL_LINE_ENTITY_TYPES.include?(row["entity_type"])) ||
                 (EFILE_COMMITTEE_LINES.include?(row["line_number"]) && is_committee)
 
     # BUG FIX (found while building the 2026 data-center/AI report): raw receipts-shaped

@@ -330,6 +330,7 @@
 # filings as two distinct transactions.
 
 require_relative "lib/bootstrap"
+require_relative "lib/efile_dedup"
 
 require "csv"
 require "date"
@@ -860,10 +861,9 @@ class FecAnalyzer
       counterparty = shape == :receipts ? efile_contributor_name(row) : row["recipient_name"].to_s.strip
       [d, row[amount_field].to_s.strip, counterparty]
     end
-    pass2 = pass1.group_by(&natural_key).flat_map do |_, group|
-      file_numbers = group.map { |(_, row)| row["file_number"].to_s }.uniq
-      file_numbers.size > 1 ? [group.max_by { |(_, row)| row["load_timestamp"].to_s }] : group
-    end
+    # When a group does span filings, lib/efile_dedup.rb keeps every row from the newest
+    # filing (not just one), so a genuine repeat inside the corrected filing survives too.
+    pass2 = EfileDedup.collapse_natural_key_groups(pass1, row_of: ->(item) { item[1] }, key: natural_key)
 
     pass2.map { |(_, row)| row }
   end

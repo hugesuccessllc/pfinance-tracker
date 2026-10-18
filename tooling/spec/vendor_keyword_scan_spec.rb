@@ -41,6 +41,16 @@ RSpec.describe "vendor-keyword-scan.rb" do
       dir = Dir.mktmpdir("committees-fixture")
       expect(committees(dir)).to eq([])
     end
+
+    it "skips a CONNECTED-marked committee unless include_connected is true" do
+      dir = Dir.mktmpdir("committees-fixture")
+      FileUtils.mkdir_p(File.join(dir, "C00000100"))
+      FileUtils.mkdir_p(File.join(dir, "C00000200"))
+      File.write(File.join(dir, "C00000200", "CONNECTED"), "")
+
+      expect(committees(dir)).to eq(%w[C00000100])
+      expect(committees(dir, include_connected: true)).to eq(%w[C00000100 C00000200])
+    end
   end
 
   describe "scan_committee / scan_rows" do
@@ -262,6 +272,53 @@ RSpec.describe "vendor-keyword-scan.rb" do
       gap_match = matches.find { |m| m.source == "efile-gap" }
       expect(gap_match).not_to be_nil
       expect(gap_match.date).to eq("2026-06-30")
+    end
+
+    it "dedups an original+amendment pair in the gap window, keeping the later load_timestamp" do
+      fec_dir = fec_dir_with({
+        "C00000001" => {
+          schedule_b: [schedule_b_row(recipient_name: "Unrelated", disbursement_date: "2026-06-30")],
+          efile_disbursements: [
+            efile_disbursement_row(recipient_name: "Capital Grille", disbursement_date: "2026-07-02",
+                                   disbursement_amount: "500.00", transaction_id: "SB17.1",
+                                   load_timestamp: "2026-10-10 00:00:00", file_number: "100"),
+            efile_disbursement_row(recipient_name: "Capital Grille", disbursement_date: "2026-07-02",
+                                   disbursement_amount: "500.00", transaction_id: "SB17.1",
+                                   load_timestamp: "2026-10-15 00:00:00", file_number: "200"),
+            # Same purchase refiled under a new transaction_id, name cased differently.
+            efile_disbursement_row(recipient_name: "CAPITAL GRILLE", disbursement_date: "2026-07-02",
+                                   disbursement_amount: "500.00", transaction_id: "SB17.9",
+                                   load_timestamp: "2026-10-16 00:00:00", file_number: "300")
+          ]
+        }
+      })
+      matches = []
+      options = base_options(fec_dir: fec_dir, groups: { "Fine Dining" => ["capital grille"] }, include_efile_gap: true)
+
+      scan_committee_disbursements(fec_dir, "C00000001", options, matches)
+
+      expect(matches.size).to eq(1)
+      expect(matches.first.transaction_id).to eq("SB17.9")
+      expect(matches.first.line).to eq(4)
+    end
+
+    it "keeps same-date, same-amount gap rows with distinct transaction_ids from one filing" do
+      fec_dir = fec_dir_with({
+        "C00000001" => {
+          schedule_b: [schedule_b_row(recipient_name: "Unrelated", disbursement_date: "2026-06-30")],
+          efile_disbursements: (1..3).map do |i|
+            efile_disbursement_row(recipient_name: "Intercontinental The Willard", disbursement_date: "2026-07-05",
+                                   disbursement_amount: "6674.08", transaction_id: "ROOM#{i}",
+                                   file_number: "2028678", load_timestamp: "2026-10-16 16:19:56")
+          end
+        }
+      })
+      matches = []
+      options = base_options(fec_dir: fec_dir, groups: { "Resorts" => ["willard"] }, include_efile_gap: true)
+
+      scan_committee_disbursements(fec_dir, "C00000001", options, matches)
+
+      expect(matches.size).to eq(3)
     end
 
     it "does not scan efile files when include_efile_gap is false, even if present" do

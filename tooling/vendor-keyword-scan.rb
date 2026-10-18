@@ -72,6 +72,16 @@
 #   approximate by calendar year for rows missing that column, matching how
 #   analyze-candidate.rb and donor-keyword-scan.rb already handle the same gap.
 #
+# EFILE GAP DEDUP
+#   A committee can file an original report and an amendment covering the same quarter,
+#   and both land in efile-*.csv with identical rows (Pfluger's C00719294 Q3 2026: file
+#   numbers 2025566 and 2028678, every row present twice). Scanning them raw double-counted
+#   every gap-window match. Gap rows are now deduped before matching, with the same two
+#   passes analyze-candidate.rb uses (gotcha 8): by transaction_id keeping the latest
+#   load_timestamp, then by (date, amount, upcased recipient_name) via lib/efile_dedup.rb,
+#   which only collapses a group spanning more than one filing. Rows on or before
+#   schedule_b's own max date are still never read, so processed data is untouched.
+#
 # TESTING: everything below the CLI guard (`if $PROGRAM_NAME == __FILE__`) is the
 # executable entry point; `require`-ing this file (as spec/vendor_keyword_scan_spec.rb
 # does) loads only the VendorMatch/PathedCsv structs and the helper methods, with no side
@@ -84,6 +94,7 @@
 
 require_relative "lib/bootstrap"
 require_relative "lib/fec_committees"
+require_relative "lib/efile_dedup"
 
 require "csv"
 require "optparse"
@@ -193,11 +204,55 @@ def scan_committee_disbursements(fec_dir, cid, options, matches)
   max_date = schedule_b_max_date(committee_dir)
   return if max_date.nil? # no schedule_b baseline to compare against; skip rather than guess
 
-  disbursement_efile_paths(committee_dir).each do |path|
+  gap_rows = dedup_efile_gap_rows(collect_efile_gap_rows(disbursement_efile_paths(committee_dir), max_date))
+  scan_rows(CollectedRows.new(gap_rows), options, matches, cid, committee_dir,
+            source: "efile-gap", min_date_exclusive: max_date)
+end
+
+# Every disbursement-shaped efile row dated strictly after max_date, as [path, lineno, row].
+def collect_efile_gap_rows(paths, max_date)
+  paths.flat_map do |path|
+    rows = []
     File.open(path) do |f|
-      scan_rows(PathedCsv.new(path, CSV.new(f, headers: true)), options, matches, cid, committee_dir,
-                source: "efile-gap", min_date_exclusive: max_date)
+      csv = CSV.new(f, headers: true)
+      while (row = csv.shift)
+        rows << [path, csv.lineno, row] if row["disbursement_date"].to_s > max_date
+      end
     end
+    rows
+  end
+end
+
+# See "EFILE GAP DEDUP" in the header: two passes, same as analyze-candidate.rb gotcha 8.
+def dedup_efile_gap_rows(rows)
+  latest = ->(group) { group.max_by { |(_, _, row)| row["load_timestamp"].to_s } }
+  pass1 = rows.group_by { |(_, _, row)| row["transaction_id"].to_s.strip }.flat_map do |txn_id, group|
+    txn_id.empty? ? group : [latest.call(group)]
+  end
+  natural_key = ->((_, _, row)) { [row["disbursement_date"].to_s, row["disbursement_amount"].to_s.strip, row["recipient_name"].to_s.strip.upcase] }
+  EfileDedup.collapse_natural_key_groups(pass1, row_of: ->(item) { item[2] }, key: natural_key)
+            .sort_by { |(path, lineno, _)| [path, lineno] }
+end
+
+# Feeds pre-collected [path, lineno, row] triples through scan_rows the same way PathedCsv
+# feeds a live CSV, so matches still report the real source file and line.
+class CollectedRows
+  def initialize(rows)
+    @rows = rows.dup
+    @current = nil
+  end
+
+  def next_row
+    @current = @rows.shift
+    @current && @current[2]
+  end
+
+  def path
+    @current && @current[0]
+  end
+
+  def lineno
+    @current && @current[1]
   end
 end
 

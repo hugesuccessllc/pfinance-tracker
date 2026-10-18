@@ -240,10 +240,10 @@ RSpec.describe "donor-keyword-scan.rb" do
           schedule_a: [schedule_a_row(contribution_receipt_date: "2020-01-01")],
           efile_receipts: [
             efile_receipt_row(contributor_last_name: "MatchAmend", contributor_employer: "OldEmployer",
-                               transaction_id: "TXA", load_timestamp: "2026-01-01T00:00:00Z",
+                               transaction_id: "TXA", load_timestamp: "2026-01-01T00:00:00Z", file_number: "100",
                                contribution_receipt_date: "2026-07-05", contribution_receipt_amount: "150.00"),
             efile_receipt_row(contributor_last_name: "MatchAmend", contributor_employer: "NewEmployer",
-                               transaction_id: "TXB", load_timestamp: "2026-08-01T00:00:00Z",
+                               transaction_id: "TXB", load_timestamp: "2026-08-01T00:00:00Z", file_number: "200",
                                contribution_receipt_date: "2026-07-05", contribution_receipt_amount: "150.00")
           ]
         }
@@ -256,7 +256,7 @@ RSpec.describe "donor-keyword-scan.rb" do
     end
 
     describe "entity_type / line_number restriction" do
-      it "counts an IND row on 11AI and a PAC row on 11C, but not an IND on 11C or a PAC on 11AI" do
+      it "counts IND/ORG rows on 11AI and PAC/COM rows on 11C, but not an IND on 11C or a PAC on 11AI" do
         fec_dir = fec_dir_with({
           "C00000001" => {
             schedule_a: [schedule_a_row(contribution_receipt_date: "2020-01-01")],
@@ -276,14 +276,22 @@ RSpec.describe "donor-keyword-scan.rb" do
               efile_receipt_row(contributor_last_name: "MatchPacAI", contributor_first_name: "", contributor_middle_name: "",
                                  entity_type: "PAC", line_number: "11AI",
                                  transaction_id: "T4", contribution_receipt_amount: "40.00",
-                                 contribution_receipt_date: "2026-07-04")
+                                 contribution_receipt_date: "2026-07-04"),
+              efile_receipt_row(contributor_last_name: "MatchOrgAI", contributor_first_name: "", contributor_middle_name: "",
+                                 entity_type: "ORG", line_number: "11AI",
+                                 transaction_id: "T5", contribution_receipt_amount: "50.00",
+                                 contribution_receipt_date: "2026-07-05"),
+              efile_receipt_row(contributor_last_name: "MatchComC", contributor_first_name: "", contributor_middle_name: "",
+                                 entity_type: "COM", line_number: "11C",
+                                 transaction_id: "T6", contribution_receipt_amount: "60.00",
+                                 contribution_receipt_date: "2026-07-06")
             ]
           }
         })
 
         matches = scan(File.join(fec_dir, "C00000001"), "C00000001", { "Test" => ["match"] })
 
-        expect(matches.map(&:contributor_name)).to contain_exactly("MatchIndAI", "MatchPacC")
+        expect(matches.map(&:contributor_name)).to contain_exactly("MatchIndAI", "MatchPacC", "MatchOrgAI", "MatchComC")
       end
     end
 
